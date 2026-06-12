@@ -2,86 +2,86 @@
 # frozen_string_literal: true
 
 # ─────────────────────────────────────────────────────────────────────────────
-# deck.rb — controla o FIFINE Control Deck / D6 (0x0060) a partir de um YAML.
+# deck.rb — control the FIFINE Control Deck / D6 (0x0060) from a YAML file.
 #
-# Ideia "simples": no YAML você descreve cada tecla com um TEXTO+fundo, uma
-# IMAGEM pronta ou só uma COR, e um COMANDO de shell para rodar quando ela for
-# pressionada. O `deck.rb` pinta as teclas e (opcionalmente) fica escutando os
-# toques e disparando os comandos.
+# The "simple" idea: in the YAML you describe each key with TEXT+background, a
+# ready IMAGE or just a COLOR, plus a shell COMMAND to run when it is pressed.
+# `deck.rb` paints the keys and (optionally) keeps listening for presses and
+# firing the commands.
 #
-# USO:
-#   sudo ruby deck.rb apply  [config.yml]   # pinta todas as teclas e ajusta brilho
-#   sudo ruby deck.rb run    [config.yml]   # pinta + escuta toques + roda comandos (Ctrl-C p/ sair)
-#   sudo ruby deck.rb listen [config.yml]   # DEBUG: só imprime o índice da tecla tocada
-#   sudo ruby deck.rb clear                 # apaga todas as teclas
+# USAGE:
+#   sudo ruby deck.rb apply  [config.yml]   # paint all keys and set brightness
+#   sudo ruby deck.rb run    [config.yml]   # paint + listen + run commands (Ctrl-C to quit)
+#   sudo ruby deck.rb listen [config.yml]   # DEBUG: just print the pressed key index
+#   sudo ruby deck.rb clear                 # clear all keys
 #
-# config.yml default = ./deck.yml (veja deck.example.yml).
+# config.yml default = ./deck.yml (see deck.example.yml).
 #
-# Mesmas ENV do fifine_d6_deck.rb (FIFINE_PID, FIFINE_RES, FIFINE_ROT, ...).
-# IMPORTANTE: feche o OpenDeck antes (brigam pelo device). Use sudo ou a regra
-# udev (41-fifine-d6-0060.rules).
+# Same ENV as fifine_d6_deck.rb (FIFINE_PID, FIFINE_RES, FIFINE_ROT, ...).
+# IMPORTANT: close OpenDeck first (they fight over the device). Use sudo or the
+# udev rule (41-fifine-d6-0060.rules).
 #
-# ── TODO (coisas que stream decks costumam fazer e que ficam para depois) ─────
-#   [ ] Páginas / perfis (várias telas de 15 teclas, tecla para alternar).
-#   [ ] Estado liga/desliga por tecla (toggle) com 2 imagens (ex.: mute on/off).
-#   [ ] Recarregar o YAML ao vivo quando o arquivo mudar (file watch).
-#   [ ] Daemon/serviço systemd (--user) para subir junto com a sessão.
-#   [ ] Texto sobre imagem (overlay), ícones + legenda, alinhamento/fonte/tamanho.
-#   [ ] Long-press / double-press / sequências de teclas.
-#   [ ] Encoders/diais (o 0x0060 não tem, mas a família Mirabox tem).
-#   [ ] Mapa de exibição configurável (hoje exibição assume índice == config).
-#   [ ] Feedback visual ao pressionar (piscar/realçar a tecla).
+# ── TODO (things stream decks usually do, left for later) ─────────────────────
+#   [ ] Pages / profiles (several 15-key screens, a key to switch).
+#   [ ] Per-key on/off state (toggle) with 2 images (e.g. mute on/off).
+#   [ ] Live-reload the YAML when the file changes (file watch).
+#   [ ] systemd (--user) daemon/service to start with the session.
+#   [ ] Text over image (overlay), icon + caption, alignment/font/size.
+#   [ ] Long-press / double-press / key sequences.
+#   [ ] Encoders/dials (the 0x0060 has none, but the Mirabox family does).
+#   [ ] Configurable display map (today the display assumes index == config).
+#   [ ] Visual feedback on press (blink/highlight the key).
 # ─────────────────────────────────────────────────────────────────────────────
 
 require "yaml"
 require_relative "lib/fifine_deck"
 
-$stdout.sync = true # log em arquivo atualiza ao vivo (sem buffer)
+$stdout.sync = true # file log updates live (no buffering)
 
-DEBOUNCE = 0.20 # s — ignora repetições do mesmo toque dentro desse intervalo
+DEBOUNCE = 0.20 # s — ignore repeats of the same press within this interval
 
 def mono = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
 def log(msg) = puts("[#{Time.now.strftime('%Y-%m-%d %H:%M:%S')}] #{msg}")
 
-# Notificação no KDE (systray). Silencioso se notify-send não existir.
+# KDE (systray) notification. Silent if notify-send is missing.
 def notify(summary, body = "")
   Process.detach(Process.spawn("notify-send", "-a", "FIFINE Deck",
                                "-i", "input-keyboard", summary, body,
                                out: File::NULL, err: File::NULL))
 rescue StandardError
-  # sem notify-send: ignora
+  # no notify-send: ignore
 end
 
-# Pinta uma tela cheia (todas as teclas com `background`, mensagem no centro).
-# Usado para boas-vindas e para o estado "parado" ao encerrar.
+# Paint a full screen (all keys with `background`, message on the center key).
+# Used for the welcome screen and the "stopped" state on shutdown.
 def show_splash(deck, text:, background:, color: "ffffff", brightness: nil, res:, hold: nil)
   bg  = FifineDeck::Render.color(background, size: res)
   msg = FifineDeck::Render.text(text, background: background, color: color, size: res)
   jpegs = {}
   FifineDeck::KEYS.times { |k| jpegs[k] = bg }
-  jpegs[FifineDeck::KEYS / 2] = msg # tecla central (7 num 3x5)
+  jpegs[FifineDeck::KEYS / 2] = msg # center key (7 on a 3x5)
   deck.apply_images(jpegs, brightness: brightness)
   sleep hold if hold
 end
 
 def load_config(path)
   unless File.exist?(path)
-    abort "Config não encontrada: #{path}\n(crie um deck.yml — veja deck.example.yml)"
+    abort "Config not found: #{path}\n(create a deck.yml — see deck.example.yml)"
   end
   raw = YAML.safe_load_file(path) || {}
   settings = raw["settings"] || {}
   base_dir = File.dirname(File.expand_path(path))
 
-  # normaliza chaves de teclas para Integer (YAML pode trazer "0" ou 0)
+  # normalize key indexes to Integer (YAML may give "0" or 0)
   keys = {}
   (raw["keys"] || {}).each do |k, spec|
     next if spec.nil?
     keys[Integer(k)] = spec
   end
 
-  # keymap opcional: índice físico tocado (0-based, = byte9-1) -> tecla do config.
-  # Default = identidade. Use `listen` para descobrir o índice físico e ajustar.
+  # optional keymap: physical pressed index (0-based, = byte9-1) -> config key.
+  # Default = identity. Use `listen` to discover the physical index and adjust.
   keymap = {}
   (settings["keymap"] || {}).each { |from, to| keymap[Integer(from)] = Integer(to) }
 
@@ -89,7 +89,7 @@ def load_config(path)
     res: Integer(settings["res"] || FifineDeck::RES) }
 end
 
-# Renderiza a especificação de UMA tecla em JPEG. Precedência: image > text > color.
+# Render ONE key's spec to JPEG. Precedence: image > icon > text > color.
 def render_spec(spec, base_dir, res)
   bg = (spec["background"] || "000000").to_s
   if (img = spec["image"])
@@ -99,7 +99,7 @@ def render_spec(spec, base_dir, res)
     begin
       FifineDeck::Render.icon(ico, background: bg, size: res)
     rescue RuntimeError => e
-      warn "  ! #{e.message}\n    -> caindo para texto"
+      warn "  ! #{e.message}\n    -> falling back to text"
       label = spec["text"] || Array(ico).first
       FifineDeck::Render.text(label.to_s, background: bg,
                               color: (spec["color"] || "ffffff").to_s, size: res)
@@ -113,7 +113,7 @@ def render_spec(spec, base_dir, res)
   elsif (col = spec["color"] || spec["background"])
     FifineDeck::Render.color(col.to_s, size: res)
   else
-    FifineDeck::Render.color("000000", size: res) # tecla declarada mas vazia -> preta
+    FifineDeck::Render.color("000000", size: res) # key declared but empty -> black
   end
 end
 
@@ -126,17 +126,17 @@ def run_command(cmd)
   pid = Process.spawn("/bin/sh", "-c", cmd.to_s, pgroup: true)
   Process.detach(pid)
 rescue StandardError => e
-  warn "  ! falha ao executar #{cmd.inspect}: #{e.message}"
+  warn "  ! failed to run #{cmd.inspect}: #{e.message}"
 end
 
-# ── comandos ────────────────────────────────────────────────────────────────
+# ── commands ──────────────────────────────────────────────────────────────────
 def cmd_apply(path)
   cfg = load_config(path)
   jpegs = render_all(cfg)
   FifineDeck::Deck.open do |deck|
     deck.apply_images(jpegs, brightness: cfg[:settings]["brightness"])
   end
-  puts "Pintei #{jpegs.size} tecla(s)."
+  puts "Painted #{jpegs.size} key(s)."
 end
 
 def cmd_run(path)
@@ -148,22 +148,22 @@ def cmd_run(path)
   g = cfg[:settings]["goodbye"] || {}
   last = Hash.new(0.0)
 
-  # SIGINT (Ctrl-C) e SIGTERM (systemd/sessão) -> para o loop e pinta o "tchau".
+  # SIGINT (Ctrl-C) and SIGTERM (systemd/session) -> stop the loop and paint goodbye.
   stop = false
   %w[INT TERM].each { |sig| trap(sig) { stop = true } }
 
   FifineDeck::Deck.open do |deck|
-    # boas-vindas
-    show_splash(deck, text: w["text"] || "Olá!",
+    # welcome
+    show_splash(deck, text: w["text"] || "Hi!",
                 background: (w["background"] || "1e1e2e").to_s,
                 color: (w["color"] || "ffffff").to_s,
                 brightness: brightness, res: res, hold: 1.3)
     deck.apply_images(jpegs, brightness: brightness)
-    log "Deck ligado: #{jpegs.size} teclas pintadas. Escutando toques… (Ctrl-C/SIGTERM para sair)"
-    notify("Deck ligado", "Escutando os toques do FIFINE D6.")
+    log "Deck on: #{jpegs.size} keys painted. Listening for presses… (Ctrl-C/SIGTERM to quit)"
+    notify("Deck on", "Listening for FIFINE D6 presses.")
 
     until stop
-      next unless deck.wait_readable(0.3) # acorda p/ checar `stop`
+      next unless deck.wait_readable(0.3) # wake up to check `stop`
       idx = deck.read_press
       next unless idx
       ckey = cfg[:keymap].fetch(idx, idx)
@@ -171,51 +171,51 @@ def cmd_run(path)
       next if now - last[ckey] < DEBOUNCE
       last[ckey] = now
       spec = cfg[:keys][ckey]
-      label = ckey == idx ? "tecla #{idx}" : "tecla #{idx} → config #{ckey}"
+      label = ckey == idx ? "key #{idx}" : "key #{idx} → config #{ckey}"
       if spec && spec["command"]
         log "#{label}: #{spec['command']}"
         run_command(spec["command"])
       else
-        log "#{label}: (sem comando)"
+        log "#{label}: (no command)"
       end
     end
   ensure
-    # estado "parado" bem visível: deixa claro que o ruby não escuta mais.
-    # best-effort: se o device sumiu, não deixa isso mascarar o erro original.
+    # very visible "stopped" state: makes it clear ruby is no longer listening.
+    # best-effort: if the device is gone, don't let that mask the original error.
     begin
       show_splash(deck, text: g["text"] || "Deck OFF",
                   background: (g["background"] || "2a0a0a").to_s,
                   color: (g["color"] || "ff6666").to_s,
                   brightness: g["brightness"] || 25, res: res) if deck
     rescue StandardError => e
-      log "não consegui pintar o 'OFF' (#{e.class}: #{e.message})"
+      log "couldn't paint 'OFF' (#{e.class}: #{e.message})"
     end
-    log "Deck parado (não estou mais escutando)."
-    notify("Deck desligado", "Parei de escutar os toques.")
+    log "Deck stopped (no longer listening)."
+    notify("Deck off", "Stopped listening for presses.")
   end
 rescue EOFError
-  abort "Device desconectado."
+  abort "Device disconnected."
 end
 
 def cmd_listen(path)
-  # Não exige config; serve para descobrir o mapeamento físico das teclas.
+  # Doesn't require a config; used to discover the physical key mapping.
   res_cfg = File.exist?(path) ? load_config(path) : nil
   keymap  = res_cfg ? res_cfg[:keymap] : {}
   FifineDeck::Deck.open do |deck|
-    puts "Pressione as teclas para ver o índice (Ctrl-C para sair)."
-    puts "Use isto para montar `settings.keymap` se a tecla tocada ≠ a tecla pintada."
+    puts "Press keys to see the index (Ctrl-C to quit)."
+    puts "Use this to build `settings.keymap` if the pressed key ≠ the painted key."
     loop do
       idx = deck.read_press
       next unless idx
       mapped = keymap.fetch(idx, idx)
-      extra = mapped == idx ? "" : "  (mapeada p/ config #{mapped})"
-      puts "  toque: índice físico #{idx}#{extra}"
+      extra = mapped == idx ? "" : "  (mapped to config #{mapped})"
+      puts "  press: physical index #{idx}#{extra}"
     end
   end
 rescue Interrupt
-  puts "\nTchau."
+  puts "\nBye."
 rescue EOFError
-  abort "Device desconectado."
+  abort "Device disconnected."
 end
 
 def cmd_clear
@@ -224,10 +224,10 @@ def cmd_clear
     deck.clear_all
     deck.finish!
   end
-  puts "Teclas apagadas."
+  puts "Keys cleared."
 end
 
-# ── dispatch ────────────────────────────────────────────────────────────────
+# ── dispatch ──────────────────────────────────────────────────────────────────
 config_path = ARGV[1] || "deck.yml"
 begin
   case ARGV[0]
@@ -236,11 +236,11 @@ begin
   when "listen" then cmd_listen(config_path)
   when "clear"  then cmd_clear
   else
-    puts File.read(__FILE__)[/^# USO:.*?# ────/m].gsub(/^# ?/, "")
+    puts File.read(__FILE__)[/^# USAGE:.*?# ────/m].gsub(/^# ?/, "")
   end
 rescue Errno::EACCES, Errno::EPERM
-  abort "Sem permissão para abrir o device. Rode com sudo ou instale a regra udev " \
+  abort "No permission to open the device. Run with sudo or install the udev rule " \
         "(41-fifine-d6-0060.rules)."
 rescue RuntimeError => e
-  abort "Erro: #{e.message}"
+  abort "Error: #{e.message}"
 end

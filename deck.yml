@@ -1,31 +1,31 @@
-# deck.yml — layout pessoal do Fabio (KDE) para o FIFINE D6.
-# Rode com:  nix-shell --run "ruby deck.rb run deck.yml"
+# deck.yml — Fabio's personal layout (KDE) for the FIFINE D6.
+# Run with:  nix-shell --run "ruby deck.rb run deck.yml"
 #
-# Layout (índice natural, 0 = topo-esquerda):
-#     0   1   2   3   4      apps de dev
-#     5   6   7   8   9      navegadores / web
-#    10  11  12  13  14      web tools + mídia + sistema
+# Layout (natural index, 0 = top-left):
+#     0   1   2   3   4      dev apps
+#     5   6   7   8   9      browsers / web
+#    10  11  12  13  14      web tools + media + system
 #
-# ── PRÉ-REQUISITOS ────────────────────────────────────────────────────────────
-# • cycle-or-launch: os comandos rodam em `/bin/sh -c`, que NÃO carrega funções
-#   do seu .bashrc/.zshrc. Se o seu cycle-or-launch for uma FUNÇÃO de shell, ele
-#   não será encontrado. Deixe-o como executável no PATH, ex.:
-#       install -Dm755 bin/cycle-or-launch ~/.local/bin/cycle-or-launch
-#   (já incluí uma versão em bin/cycle-or-launch baseada na sua descrição.)
-# • As páginas web abrem no navegador padrão via `xdg-open`.
-# • Mic Mute usa wpctl (PipeWire) com fallback pactl; Maximizar usa gdbus
-#   (atalho do KWin); Lock usa loginctl. Ícones (icon:) vêm do tema do sistema.
+# ── PREREQUISITES ─────────────────────────────────────────────────────────────
+# • cycle-or-launch: commands run under `/bin/sh -c`, which does NOT load
+#   functions from your .bashrc/.zshrc. If your cycle-or-launch is a shell
+#   FUNCTION it won't be found. Keep it as an executable on your PATH, e.g.:
+#       install -Dm755 bin/focus-or-launch ~/.local/bin/focus-or-launch
+#   (a reference focus/launch implementation lives in bin/focus-or-launch.)
+# • Web pages open in the default browser via `xdg-open`.
+# • Mic Mute uses wpctl (PipeWire) with a pactl fallback; Maximize uses gdbus
+#   (a KWin shortcut); Lock uses loginctl. Icons (icon:) come from the system theme.
 #
-# Personalize quando precisar (2º arg do cycle-or-launch = comando p/ abrir):
-#   - RubyMine: ajuste se o launcher não estiver no PATH (JetBrains Toolbox).
-#   - YT Music: é um app do Wavebox; o foco usa a classe da janela. O fallback
-#     abre o Wavebox — troque o 2º arg se quiser abrir direto o app.
+# Customize as needed (2nd arg of cycle-or-launch = command to open the app):
+#   - RubyMine: adjust if the launcher is not on your PATH (JetBrains Toolbox).
+#   - YT Music: it's a Wavebox app; focus uses the window class. The fallback
+#     opens Wavebox — change the 2nd arg if you want to open the app directly.
 
 settings:
   brightness: 80
-  # Telas de boas-vindas (ao iniciar o `run`) e de "parado" (ao encerrar):
+  # Welcome screen (on `run` start) and "stopped" screen (on shutdown):
   welcome:
-    text: "Olá!"
+    text: "Hi!"
     background: "1e1e2e"
     color: "ffffff"
   goodbye:
@@ -35,7 +35,7 @@ settings:
     brightness: 25
 
 keys:
-  # ── linha 1: apps de dev (logos do tema de ícones; text = fallback) ─────────
+  # ── row 1: dev apps (icon-theme logos; text = fallback) ─────────────────────
   0:
     icon: ["org.kde.konsole", "utilities-terminal", "terminal"]
     text: "Terminal"
@@ -66,7 +66,7 @@ keys:
     background: "1e1e1e"
     command: "cycle-or-launch 1password 1password"
 
-  # ── linha 2: navegadores / web ─────────────────────────────────────────────
+  # ── row 2: browsers / web ───────────────────────────────────────────────────
   5:
     icon: ["firefox", "org.mozilla.firefox", "firefox-esr"]
     text: "Firefox"
@@ -94,7 +94,7 @@ keys:
     background: "632ca6"
     command: "xdg-open https://app.datadoghq.com/apm/home"
 
-  # ── linha 3: web tools + mídia + sistema ───────────────────────────────────
+  # ── row 3: web tools + media + system ───────────────────────────────────────
   10:
     text: "Aikido"
     background: "5849be"
@@ -103,13 +103,13 @@ keys:
   11:
     text: "Mic Mute"
     background: "b02e2e"
-    # PipeWire (NixOS/KDE): wpctl é o caminho certo; pactl como fallback.
+    # PipeWire (NixOS/KDE): wpctl is the right path; pactl as a fallback.
     command: "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle || pactl set-source-mute @DEFAULT_SOURCE@ toggle"
 
   12:
-    text: "Maximizar"
+    text: "Maximize"
     background: "2e7d32"
-    # KDE Wayland: invoca o atalho do KWin via D-Bus (alterna maximizar/restaurar).
+    # KDE Wayland: invoke the KWin shortcut via D-Bus (toggles maximize/restore).
     command: 'gdbus call --session --dest org.kde.kglobalaccel --object-path /component/kwin --method org.kde.kglobalaccel.Component.invokeShortcut "Window Maximize"'
 
   13:

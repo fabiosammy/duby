@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# deck-tray-daemon — sobe a bandeja (bin/deck-tray) no nix-shell, que por sua
-# vez supervisiona o deck.rb. Use isto no autostart do KDE.
+# deck-tray-daemon — start the tray (bin/deck-tray) in the nix-shell, which in
+# turn supervises deck.rb. Use this in KDE autostart.
 #
-# Força QT_QPA_PLATFORM=xcb: o ícone de bandeja (SNI, via D-Bus) aparece igual,
-# e evitamos depender do plugin Qt-Wayland dentro do nix-shell. Requer XWayland
-# (ligado por padrão no Plasma Wayland).
+# Forces QT_QPA_PLATFORM=xcb: the tray icon (SNI, via D-Bus) shows up just the
+# same, and we avoid depending on the Qt-Wayland plugin inside the nix-shell.
+# Requires XWayland (enabled by default on Plasma Wayland).
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"

@@ -1,41 +1,41 @@
 # frozen_string_literal: true
 
 # ─────────────────────────────────────────────────────────────────────────────
-# lib/fifine_deck.rb — núcleo reutilizável do FIFINE Control Deck / D6 (0x0060)
+# lib/fifine_deck.rb — reusable core for the FIFINE Control Deck / D6 (0x0060)
 #
-# Extrai a parte "confirmada no hardware" do fifine_d6_deck.rb e adiciona a
-# LEITURA de toques (input reports), descoberta na engenharia reversa do
-# mirajazz (crate Rust que implementa o mesmo protocolo CRT/Mirabox):
+# Extracts the "hardware-confirmed" part of fifine_d6_deck.rb and adds key-press
+# READING (input reports), discovered by reverse-engineering mirajazz (the Rust
+# crate that implements the same CRT/Mirabox protocol):
 #
-#   * ESCRITA (confirmada): report HID = [report_id] + "CRT\0\0" + <CMD>,
-#     padding com zeros até o tamanho do report. Imagem = JPEG 126x126, Rot180.
+#   * WRITE (confirmed): HID report = [report_id] + "CRT\0\0" + <CMD>, padded
+#     with zeros to the report size. Image = JPEG 126x126, Rot180.
 #       init  = DIS + LIG(0) + HAN(handshake)
-#       img   = CLE(all) + BAT(<hi><lo><key+1>) + JPEG em chunks
-#       fim   = ULEND + STP
-#   * LEITURA (mirajazz): input report de 512B começa com "ACK" (0x41 0x43 0x4B);
-#     byte 9 = índice da tecla (1-based; 0 = refresh de estado). O byte 10 é o
-#     estado (down/up) só em protocolos > 2 — o 0x0060 é v2, então cada report
-#     equivale a um toque completo. Índice 0-based da tecla = byte9 - 1.
+#       img   = CLE(all) + BAT(<hi><lo><key+1>) + JPEG in chunks
+#       end   = ULEND + STP
+#   * READ (mirajazz): a 512B input report starts with "ACK" (0x41 0x43 0x4B);
+#     byte 9 = key index (1-based; 0 = state refresh). Byte 10 is the down/up
+#     state only on protocols > 2 — the 0x0060 is v2, so each report is one full
+#     press. 0-based key index = byte9 - 1.
 #
-# Usado por deck.rb (runner de YAML). O fifine_d6_deck.rb continua autônomo.
+# Used by deck.rb (the YAML runner). fifine_d6_deck.rb remains standalone.
 # ─────────────────────────────────────────────────────────────────────────────
 
 require "open3"
 
 module FifineDeck
-  # Defaults (sobrescrevíveis por ENV, idênticos ao fifine_d6_deck.rb)
+  # Defaults (overridable via ENV, identical to fifine_d6_deck.rb)
   VID    = Integer(ENV.fetch("FIFINE_VID", "0x3142"))
   PID    = Integer(ENV.fetch("FIFINE_PID", "0x0060"))
-  RES    = Integer(ENV.fetch("FIFINE_RES", "126"))   # combo confirmado no 0x0060
+  RES    = Integer(ENV.fetch("FIFINE_RES", "126"))   # confirmed combo on the 0x0060
   ROWS   = Integer(ENV.fetch("FIFINE_ROWS", "3"))
   COLS   = Integer(ENV.fetch("FIFINE_COLS", "5"))
   KEYS   = Integer(ENV.fetch("FIFINE_KEYS", (ROWS * COLS).to_s)) # 3x5 = 15
-  ROT    = Integer(ENV.fetch("FIFINE_ROT", "180"))   # 0x0060 exibe girado 180°
+  ROT    = Integer(ENV.fetch("FIFINE_ROT", "180"))   # the 0x0060 displays rotated 180°
   MIRROR = ENV.fetch("FIFINE_MIRROR", "none")        # none/x/y/both
-  # CONFIRMADO no hardware (2026-06-12): a EXIBIÇÃO (BAT) numera de baixo p/ cima
-  # (linha invertida), mas os TOQUES chegam em ordem natural (topo-esquerda = 0).
-  # Por isso o índice do config é "natural" e fazemos um flip de linha só na
-  # exibição. Desligue com FIFINE_FLIP_ROWS=0 se um dia o firmware mudar.
+  # CONFIRMED on hardware (2026-06-12): the DISPLAY (BAT) is numbered bottom-up
+  # (rows flipped), but PRESSES arrive in natural order (top-left = 0). So the
+  # config index is "natural" and we row-flip only the display side. Turn it off
+  # with FIFINE_FLIP_ROWS=0 if a future firmware changes this.
   FLIP_ROWS = ENV.fetch("FIFINE_FLIP_ROWS", "1") != "0"
 
   ENV_PACKET   = ENV["FIFINE_PACKET"]&.to_i
@@ -44,11 +44,11 @@ module FifineDeck
   INIT_SEQ = (ENV["FIFINE_INIT"]   || "dis,lig0,han").split(",").map(&:strip).reject(&:empty?)
   FIN_SEQ  = (ENV["FIFINE_FINISH"] || "ulend,stp").split(",").map(&:strip).reject(&:empty?)
 
-  # ── Descoberta do device (hidraw via sysfs) ─────────────────────────────────
+  # ── Device discovery (hidraw via sysfs) ─────────────────────────────────────
   module Device
     module_function
 
-    # Parser mínimo de HID report descriptor -> {report_id_out:, out_bytes:, vendor_page:}
+    # Minimal HID report descriptor parser -> {report_id_out:, out_bytes:, vendor_page:}
     def parse_descriptor(desc)
       bytes = desc.bytes
       i = 0
@@ -64,7 +64,7 @@ module FifineDeck
         val = dat.each_with_index.reduce(0) { |a, (x, k)| a | (x << (8 * k)) }
         i += bsize
         case tag
-        when 0x04 then vendor_page = true if val >= 0xFF00 # Usage Page vendor
+        when 0x04 then vendor_page = true if val >= 0xFF00 # vendor Usage Page
         when 0x74 then rsize  = val                        # Report Size
         when 0x94 then rcount = val                        # Report Count
         when 0x84 then rid    = val                        # Report ID
@@ -93,17 +93,17 @@ module FifineDeck
       end
       cands = matching(vid, pid)
       if cands.empty?
-        raise "Nenhum hidraw para #{format('%04x:%04x', vid, pid)} " \
-              "(device plugado? OpenDeck fechado?)"
+        raise "No hidraw for #{format('%04x:%04x', vid, pid)} " \
+              "(device plugged in? other app closed?)"
       end
       cands.find { |c| c[:vendor_page] } || cands.last
     end
   end
 
-  # ── Transporte + protocolo (escrita e leitura) ──────────────────────────────
+  # ── Transport + protocol (write and read) ───────────────────────────────────
   class Deck
     CRT      = [0x43, 0x52, 0x54, 0x00, 0x00].freeze
-    READ_LEN = 1088 # >= qualquer tamanho de report; o kernel devolve 1 report/leitura
+    READ_LEN = 1088 # >= any report size; the kernel returns 1 report per read
 
     def self.open(packet: nil, report_id: nil, mode: "r+b")
       d   = Device.pick
@@ -135,24 +135,24 @@ module FifineDeck
 
     def cmd(*tail) = write_report(CRT + tail)
 
-    # comandos nomeados
+    # named commands
     def dis     = cmd(0x44, 0x49, 0x53)                               # DIS
     def lig(p)  = cmd(0x4C, 0x49, 0x47, 0x00, 0x00, p.clamp(0, 100))  # LIG <pct>
     def mod(m)  = cmd(0x4D, 0x4F, 0x44, 0x00, 0x00, 0x30 + m)         # MOD
     def stp     = cmd(0x53, 0x54, 0x50)                               # STP
     def ulend   = cmd(0x55, 0x4C, 0x45, 0x4E, 0x44)                   # ULEND
     def connect = cmd(0x43, 0x4F, 0x4E, 0x4E, 0x45, 0x43, 0x54)       # CONNECT
-    def han     = write_report([0x48, 0x41, 0x4E])                    # <id>HAN (sem CRT)
+    def han     = write_report([0x48, 0x41, 0x4E])                    # <id>HAN (no CRT)
     def cle(key) = cmd(0x43, 0x4C, 0x45, 0x00, 0x00, 0x00, key == 0xFF ? 0xFF : key + 1)
     def clear_all = cle(0xFF)
 
-    def bat(key, len) # cabeçalho de imagem
+    def bat(key, len) # image header
       cmd(0x42, 0x41, 0x54, 0x00, 0x00, (len >> 8) & 0xFF, len & 0xFF, key + 1)
     end
 
-    # Índice "natural" (0 = topo-esquerda, row-major) -> índice de EXIBIÇÃO do
-    # device. No 0x0060 a exibição é de baixo p/ cima; os toques (read_press) já
-    # chegam naturais, então o flip fica só aqui.
+    # "Natural" index (0 = top-left, row-major) -> device DISPLAY index. On the
+    # 0x0060 the display is numbered bottom-up; presses (read_press) already
+    # arrive natural, so the flip lives only here.
     def display_index(key)
       return key unless FLIP_ROWS
       row, col = key.divmod(COLS)
@@ -184,7 +184,7 @@ module FifineDeck
     def init!(seq = INIT_SEQ)   = seq.each { |s| run_step(s) }
     def finish!(seq = FIN_SEQ)  = seq.each { |s| run_step(s) }
 
-    # Envia UMA imagem (init -> imagem -> finish) — atalho avulso.
+    # Send ONE image (init -> image -> finish) — standalone shortcut.
     def send_image(key, jpeg, init: INIT_SEQ, finish: FIN_SEQ)
       init!(init)
       clear_all
@@ -193,8 +193,8 @@ module FifineDeck
       finish!(finish)
     end
 
-    # Envia VÁRIAS imagens de uma vez (init/clear uma única vez). `jpegs` é um
-    # Hash { key0based => jpeg_bytes }. `brightness` (0-100) é opcional.
+    # Send SEVERAL images at once (init/clear only once). `jpegs` is a
+    # Hash { key0based => jpeg_bytes }. `brightness` (0-100) is optional.
     def apply_images(jpegs, brightness: nil)
       init!
       lig(brightness) if brightness
@@ -203,15 +203,15 @@ module FifineDeck
       finish!
     end
 
-    # ── Leitura de toques ──────────────────────────────────────────────────
-    # Espera até `timeout` segundos por dados para ler. Retorna true se há algo
-    # a ler, false no timeout. Permite que o loop verifique flags (ex.: parar).
+    # ── Key-press reading ────────────────────────────────────────────────────
+    # Waits up to `timeout` seconds for data to read. Returns true if there is
+    # something to read, false on timeout. Lets the loop check flags (e.g. stop).
     def wait_readable(timeout)
       !IO.select([@io], nil, nil, timeout).nil?
     end
 
-    # Lê 1 input report (bloqueante). Retorna o índice 0-based da tecla
-    # pressionada, ou nil se o report não for de tecla (refresh/desconhecido).
+    # Reads 1 input report (blocking). Returns the 0-based index of the pressed
+    # key, or nil if the report is not a key event (refresh/unknown).
     def read_press
       data = @io.readpartial(READ_LEN)
       return nil unless data && data.bytesize >= 11
@@ -222,12 +222,12 @@ module FifineDeck
     end
   end
 
-  # ── Render: cor sólida, texto-com-fundo, imagem pronta -> JPEG ──────────────
+  # ── Render: solid color, text-on-background, ready image -> JPEG ─────────────
   module Render
     module_function
 
-    # Binário do ImageMagick: prefere `magick` (IMv7), cai para `convert` (IMv6).
-    # Sobrescreva com FIFINE_MAGICK.
+    # ImageMagick binary: prefers `magick` (IMv7), falls back to `convert` (IMv6).
+    # Override with FIFINE_MAGICK.
     def bin
       return @bin if defined?(@bin)
       @bin = (ENV["FIFINE_MAGICK"] unless ENV["FIFINE_MAGICK"].to_s.empty?) ||
@@ -235,9 +235,9 @@ module FifineDeck
              "convert"
     end
 
-    # Caminho de um arquivo de fonte .ttf/.otf utilizável. O ImageMagick precisa
-    # de UM arquivo de fonte; em `nix-shell -p imagemagick` sem pacote de fontes
-    # ele falha com `font (null)`. Ordem: FIFINE_FONT -> fc-list -> dirs comuns.
+    # Path to a usable .ttf/.otf font file. ImageMagick needs ONE font file; on
+    # `nix-shell -p imagemagick` without a font package it fails with
+    # `font (null)`. Order: FIFINE_FONT -> fc-list -> common dirs.
     def font_path
       return @font_path if defined?(@font_path)
       @font_path = (ENV["FIFINE_FONT"] unless ENV["FIFINE_FONT"].to_s.empty?) ||
@@ -259,7 +259,7 @@ module FifineDeck
       end
     end
 
-    # Prefere uma sans regular conhecida; senão a de nome mais curto (família base).
+    # Prefers a known regular sans; otherwise the shortest name (the base family).
     def pick_font(list)
       files = list.select { |f| f =~ /\.(ttf|otf)$/i }
       return nil if files.empty?
@@ -270,13 +270,13 @@ module FifineDeck
     end
 
     def font_help
-      "Nenhuma fonte encontrada para renderizar texto.\n" \
-      "  • No Nix, use o shell.nix do projeto:  nix-shell --run \"ruby deck.rb apply deck.yml\"\n" \
-      "    ou adicione um pacote de fontes:     nix-shell -p ruby imagemagick dejavu_fonts --run \"...\"\n" \
-      "  • Ou aponte uma fonte:  FIFINE_FONT=/caminho/Fonte.ttf  (veja: fc-list | grep -i dejavu)"
+      "No font found to render text.\n" \
+      "  • On Nix, use the project's shell.nix:  nix-shell --run \"ruby deck.rb apply deck.yml\"\n" \
+      "    or add a font package:                nix-shell -p ruby imagemagick dejavu_fonts --run \"...\"\n" \
+      "  • Or point to a font:  FIFINE_FONT=/path/to/Font.ttf  (see: fc-list | grep -i dejavu)"
     end
 
-    # flags do ImageMagick para rotação/espelho (cor sólida ignora; texto/imagem usam)
+    # ImageMagick flags for rotation/mirror (solid color ignores them; text/image use them)
     def orient_args
       a = []
       a += ["-rotate", ROT.to_s] unless ROT.zero?
@@ -287,7 +287,7 @@ module FifineDeck
 
     def convert(*args)
       out, st = Open3.capture2(bin, *args, "-quality", "90", "-strip", "jpg:-", binmode: true)
-      raise "falha no ImageMagick (#{bin}) — args: #{args.inspect}" unless st.success? && !out.empty?
+      raise "ImageMagick (#{bin}) failed — args: #{args.inspect}" unless st.success? && !out.empty?
       out
     end
 
@@ -295,7 +295,7 @@ module FifineDeck
       convert("-size", "#{size}x#{size}", "xc:##{hex.delete('#')}")
     end
 
-    # Texto centralizado com auto-ajuste de fonte (caption) sobre um fundo sólido.
+    # Centered text with auto-sized font (caption) over a solid background.
     def text(str, background: "000000", color: "ffffff", font: nil, size: RES)
       f = font || font_path
       raise font_help unless f
@@ -309,13 +309,13 @@ module FifineDeck
               *orient_args)
     end
 
-    # Imagem pronta redimensionada para preencher a tecla.
+    # Ready image resized to fill the key.
     def image(path, size: RES)
-      raise "imagem não encontrada: #{path}" unless File.exist?(path)
+      raise "image not found: #{path}" unless File.exist?(path)
       convert(path, "-resize", "#{size}x#{size}!", *orient_args)
     end
 
-    # Diretórios de ícones (freedesktop + NixOS), na ordem de preferência.
+    # Icon directories (freedesktop + NixOS), in preference order.
     def icon_dirs
       dirs = [File.expand_path("~/.local/share/icons"),
               File.expand_path("~/.icons"),
@@ -326,9 +326,9 @@ module FifineDeck
       dirs.uniq.select { |d| File.directory?(d) }
     end
 
-    # Resolve um nome de ícone (tema freedesktop) para um arquivo. Aceita também
-    # um caminho direto. Prefere PNG colorido grande de hicolor/breeze; evita
-    # HighContrast/symbolic (monocromáticos). SVG só se não houver PNG.
+    # Resolves an icon name (freedesktop theme) to a file. Also accepts a direct
+    # path. Prefers a large colored PNG from hicolor/breeze; avoids
+    # HighContrast/symbolic (monochrome). SVG only if there is no PNG.
     def find_icon(name)
       return name if File.exist?(name)
       cands = icon_dirs.flat_map { |d| Dir.glob(File.join(d, "**", "#{name}.{png,svg,PNG,SVG}")) }
@@ -339,7 +339,7 @@ module FifineDeck
     end
 
     def icon_score(path)
-      s = path[/(\d+)x\d+/, 1].to_i           # tamanho em px (0 = scalable/sem tamanho)
+      s = path[/(\d+)x\d+/, 1].to_i           # size in px (0 = scalable/no size)
       s = 384 if s.zero?
       s += 4000 if path =~ %r{/hicolor/}i
       s += 2000 if path =~ /(Papirus|breeze|Adwaita)/i
@@ -347,14 +347,14 @@ module FifineDeck
       s
     end
 
-    # Ícone (do tema ou caminho) centralizado sobre um fundo sólido. `name` pode
-    # ser uma String ou uma lista de candidatos (tenta cada um até achar).
+    # Icon (from theme or path) centered over a solid background. `name` can be a
+    # String or a list of candidates (tries each until one is found).
     def icon(name, background: "000000", size: RES)
       names = Array(name).map(&:to_s)
       path = names.filter_map { |n| find_icon(n) }.first
       unless path
-        raise "ícone #{names.inspect} não encontrado nos temas. Use um caminho de " \
-              "arquivo, ou veja: find #{icon_dirs.first} -iname '<nome>.*'"
+        raise "icon #{names.inspect} not found in the themes. Use a file path, " \
+              "or see: find #{icon_dirs.first} -iname '<name>.*'"
       end
       pad = (size * 0.12).round
       inner = size - 2 * pad

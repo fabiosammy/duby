@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# focus-or-launch <classe-da-janela> <comando para abrir...>
+# focus-or-launch <window-class> <command to open...>
 #
-# Procura (via kdotool) a 1ª janela cuja classe casa com o 1º argumento e a
-# foca; se não encontrar nenhuma, executa o restante dos argumentos para abrir
-# o aplicativo. Ex.:
+# Searches (via kdotool) for the first window whose class matches the 1st
+# argument and focuses it; if none is found, runs the rest of the arguments to
+# open the app. E.g.:
 #   focus-or-launch code code
 #   focus-or-launch firefox firefox
 #   focus-or-launch wavebox-cinhimbnkkaeohfgghhklpknlkffjgod-Default wavebox
 #
-# Necessário para o deck.rb porque ele dispara comandos em `/bin/sh -c`, que não
-# carrega funções de shell do .bashrc/.zshrc. Instale no PATH:
+# Needed by deck.rb because it runs commands under `/bin/sh -c`, which does not
+# load shell functions from .bashrc/.zshrc. Install on your PATH:
 #   install -Dm755 bin/focus-or-launch ~/.local/bin/focus-or-launch
 set -uo pipefail
 

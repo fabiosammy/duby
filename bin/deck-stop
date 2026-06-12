@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
-# deck-stop — para o daemon de forma limpa (SIGTERM), o que dispara a tela de
-# "tchau"/Deck OFF antes de sair. Use quando rodar via autostart do KDE.
-pkill -TERM -f 'ruby deck.rb run' && echo "parado." || echo "nada rodando."
+# deck-stop — stop the daemon cleanly (SIGTERM), which triggers the
+# "goodbye"/Deck OFF screen before exiting. Use this with KDE autostart.
+pkill -TERM -f 'ruby deck.rb run' && echo "stopped." || echo "nothing running."

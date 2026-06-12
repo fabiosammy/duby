@@ -37,7 +37,7 @@ USAGE = <<~TXT
   FIFINE_ROT=0 FIFINE_FLIP_ROWS=0 and adjust as you learn.
 TXT
 
-# Sequência completa init -> imagem (índice CRU do device, sem flip) -> finish.
+# Full sequence init -> image (RAW device index, no flip) -> finish.
 def send_raw(deck, key, jpeg, init:, finish:)
   init.each { |s| deck.run_step(s) }
   deck.clear_all

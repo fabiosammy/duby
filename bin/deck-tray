@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Bandeja (systray) do KDE para o FIFINE Deck.
+"""KDE system-tray app for the FIFINE Deck.
 
-Usa QSystemTrayIcon (Qt6/PySide6), que fala o protocolo StatusNotifierItem do
-KDE — diferente do GtkStatusIcon do `yad`, este aparece no systray do Plasma
-mesmo em Wayland.
+Uses QSystemTrayIcon (Qt6/PySide6), which speaks KDE's StatusNotifierItem
+protocol — unlike `yad`'s GtkStatusIcon, this shows up in the Plasma systray
+even on Wayland.
 
-A bandeja supervisiona o `ruby deck.rb run deck.yml` como processo filho:
-inicia ao abrir, e o menu permite Parar/Iniciar/Reiniciar/Abrir log/Sair.
-Parar e Sair enviam SIGTERM ao ruby, o que dispara a tela "Deck OFF".
+The tray supervises `ruby deck.rb run deck.yml` as a child process: it starts
+on open, and the menu lets you Stop/Start/Restart/Open log/Quit. Stop and Quit
+send SIGTERM to ruby, which triggers the "Deck OFF" screen.
 
-Rode via bin/deck-tray-daemon (que entra no nix-shell e força QT_QPA_PLATFORM=xcb).
+Run via bin/deck-tray-daemon (which enters the nix-shell and forces QT_QPA_PLATFORM=xcb).
 """
 import os
 import signal
@@ -21,7 +21,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-HERE = Path(__file__).resolve().parent.parent  # diretório do projeto (duby/)
+HERE = Path(__file__).resolve().parent.parent  # project directory (duby/)
 LOG = HERE / "deck.log"
 CONFIG = "deck.yml"
 
@@ -35,10 +35,10 @@ class DeckTray:
         self.tray = QSystemTrayIcon()
         menu = QMenu()
         self.status_action = QAction("…", enabled=False)
-        self.toggle_action = QAction("Iniciar", triggered=self.toggle)
-        self.restart_action = QAction("Reiniciar", triggered=self.restart)
-        self.log_action = QAction("Abrir log", triggered=self.open_log)
-        self.quit_action = QAction("Sair", triggered=self.quit)
+        self.toggle_action = QAction("Start", triggered=self.toggle)
+        self.restart_action = QAction("Restart", triggered=self.restart)
+        self.log_action = QAction("Open log", triggered=self.open_log)
+        self.quit_action = QAction("Quit", triggered=self.quit)
 
         menu.addAction(self.status_action)
         menu.addSeparator()
@@ -57,10 +57,10 @@ class DeckTray:
         self.timer.timeout.connect(self.refresh)
         self.timer.start(1500)
 
-        self.start()  # já sobe o deck ao abrir a bandeja
+        self.start()  # start the deck as soon as the tray opens
         self.refresh()
 
-    # ── estado do processo ──────────────────────────────────────────────────
+    # ── process state ─────────────────────────────────────────────────────────
     def running(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
@@ -79,7 +79,7 @@ class DeckTray:
     def stop(self):
         if self.running():
             try:
-                self.proc.terminate()          # SIGTERM no ruby -> pinta "Deck OFF"
+                self.proc.terminate()          # SIGTERM to ruby -> paints "Deck OFF"
                 self.proc.wait(timeout=6)
             except Exception:
                 try:
@@ -94,7 +94,7 @@ class DeckTray:
                 pass
             self.logf = None
 
-    # ── ações do menu ─────────────────────────────────────────────────────────
+    # ── menu actions ──────────────────────────────────────────────────────────
     def toggle(self):
         self.stop() if self.running() else self.start()
         self.refresh()
@@ -108,15 +108,15 @@ class DeckTray:
         subprocess.Popen(["xdg-open", str(LOG)])
 
     def on_activate(self, reason):
-        if reason == QSystemTrayIcon.ActivationReason.Trigger:  # clique esquerdo
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:  # left click
             self.toggle()
 
     def refresh(self):
         run = self.running()
         self.tray.setIcon(QIcon.fromTheme("input-gaming" if run else "input-keyboard"))
-        self.tray.setToolTip("FIFINE Deck: " + ("escutando toques" if run else "parado"))
-        self.status_action.setText("●  Rodando" if run else "○  Parado")
-        self.toggle_action.setText("Parar" if run else "Iniciar")
+        self.tray.setToolTip("FIFINE Deck: " + ("listening" if run else "stopped"))
+        self.status_action.setText("●  Running" if run else "○  Stopped")
+        self.toggle_action.setText("Stop" if run else "Start")
 
     def quit(self):
         self.stop()
@@ -127,14 +127,14 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     if not QSystemTrayIcon.isSystemTrayAvailable():
-        print("Aviso: bandeja do sistema indisponível nesta sessão.", file=sys.stderr)
+        print("Warning: system tray unavailable in this session.", file=sys.stderr)
 
     tray = DeckTray(app)
 
-    # encerra limpo no logout (SIGTERM) / Ctrl-C (SIGINT)
+    # clean shutdown on logout (SIGTERM) / Ctrl-C (SIGINT)
     signal.signal(signal.SIGTERM, lambda *_: tray.quit())
     signal.signal(signal.SIGINT, lambda *_: tray.quit())
-    # acorda o loop Qt de tempos em tempos p/ processar os sinais Python acima
+    # nudge the Qt loop periodically so the Python signal handlers above run
     nudge = QTimer()
     nudge.start(400)
     nudge.timeout.connect(lambda: None)
