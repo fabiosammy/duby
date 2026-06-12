@@ -169,6 +169,33 @@ unless noted):
 `FIFINE_COLS`, `FIFINE_FLIP_ROWS`, `FIFINE_PACKET`, `FIFINE_REPORTID`,
 `FIFINE_HIDRAW`, `FIFINE_INIT`, `FIFINE_FINISH`, `FIFINE_MAGICK`, `FIFINE_FONT`.
 
+## Adapting to another deck
+
+`probe.rb` is an explorer/debugger for discovering the settings a different
+Mirabox "Stream Dock" device needs. Point it at any device with `FIFINE_VID` /
+`FIFINE_PID` and run it inside the dev shell (the udev rule avoids `sudo`):
+
+```sh
+nix-shell --run "ruby probe.rb doctor"   # auto-detect + checklist + env template
+```
+
+| Command                     | What it finds                                                     |
+| --------------------------- | ----------------------------------------------------------------- |
+| `info`                      | matching hidraw nodes, report id and packet size (auto-detected)  |
+| `doctor`                    | the above + a checklist and a starting env block                  |
+| `blink`                     | whether writing works at all (brightness should pulse)            |
+| `probe`                     | which init/finish command sequence lights a key                   |
+| `probe-res`                 | which JPEG resolution fills a key cleanly                          |
+| `orient [key]`              | the rotation/mirror (paints an `F`)                               |
+| `grid`                      | the DISPLAY index order (one color per key)                       |
+| `listen`                    | the PRESS index of each key                                       |
+| `raw <hex…>`                | send one raw report (low-level debugging)                         |
+
+Report id and packet size are read straight from the HID descriptor; the rest
+(`FIFINE_RES`, `FIFINE_ROT`, `FIFINE_INIT`/`FIFINE_FINISH`, `FIFINE_FLIP_ROWS`,
+`keymap`) are confirmed with the visual/interactive commands above. For a new
+device, start neutral with `FIFINE_ROT=0 FIFINE_FLIP_ROWS=0`.
+
 ## Troubleshooting
 
 - **`font (null)` / text doesn't render** — no font available to ImageMagick.
@@ -186,6 +213,7 @@ unless noted):
 
 ```
 deck.rb              CLI runner (apply/run/listen/clear)
+probe.rb             explorer/debugger to adapt to another deck (info/doctor/probe…)
 lib/fifine_deck.rb   device discovery, CRT protocol (read+write), JPEG rendering
 deck.example.yml     commented example config
 deck.yml             your config (default for the subcommands)
