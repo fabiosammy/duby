@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=FIFINE Deck
+Comment=Bandeja do stream deck (deck.rb) — escuta toques e dispara comandos
+Exec=/home/fabiosammy/Desenvolvimento/projetos/thoths/deck/duby/bin/deck-tray-daemon
+Icon=input-keyboard
+Terminal=false
+X-KDE-autostart-after=panel
+X-GNOME-Autostart-enabled=true
+
+# Para autostart no login do KDE, copie para ~/.config/autostart/:
+#   cp deck.desktop ~/.config/autostart/
+# (ou: Configurações do Sistema → Autostart → Adicionar Aplicativo/Script)
+#
+# Exec aponta para a BANDEJA (bin/deck-tray-daemon). Para rodar SEM bandeja
+# (headless), troque por bin/deck-daemon.

@@ -1,0 +1,31 @@
+[Unit]
+Description=FIFINE D6 Stream Deck (deck.rb)
+# inicia depois que a sessão gráfica está pronta (KWin/D-Bus/Wayland no ar)
+After=graphical-session.target
+PartOf=graphical-session.target
+# não desistir se o device ainda não estiver plugado/pronto: tenta sempre
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=%h/Desenvolvimento/projetos/thoths/deck/duby/bin/deck-daemon
+# SIGTERM atinge o ruby (cgroup) -> dispara a tela de "Deck OFF" antes de sair
+KillSignal=SIGTERM
+TimeoutStopSec=10
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
+
+# ── Instalação (systemd --user) ───────────────────────────────────────────────
+#   mkdir -p ~/.config/systemd/user
+#   ln -sf "$PWD/systemd/deck.service" ~/.config/systemd/user/deck.service
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now deck.service
+#   journalctl --user -u deck -f         # (além do deck.log no diretório)
+#   systemctl --user stop deck.service   # pinta o "Deck OFF" e sai
+#
+# Se kdotool/gdbus/notify-send falharem sob o serviço (faltando env da sessão):
+#   systemctl --user import-environment PATH WAYLAND_DISPLAY DISPLAY \
+#     DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR

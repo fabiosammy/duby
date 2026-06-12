@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# deck-daemon — sobe o deck.rb em modo `run` dentro do nix-shell, com log em
+# arquivo. Pensado para autostart do KDE ou um serviço systemd --user.
+#
+#   bin/deck-daemon            # roda em foreground (log também vai p/ deck.log)
+#
+# O log fica em <projeto>/deck.log. Pare com:  bin/deck-stop  (pinta o "tchau").
+set -uo pipefail
+
+# diretório do projeto (pasta-pai do bin/)
+HERE="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+cd "$HERE" || exit 1
+
+LOG="$HERE/deck.log"
+
+# garante PATH com: ferramentas do usuário, perfil nix e perfil do sistema —
+# necessário para achar nix-shell, cycle-or-launch (~/.local/bin), kdotool, etc.
+export PATH="$HOME/.local/bin:$HOME/.nix-profile/bin:/run/current-system/sw/bin:/etc/profiles/per-user/$USER/bin:$PATH"
+
+NIX_SHELL="$(command -v nix-shell || echo /run/current-system/sw/bin/nix-shell)"
+
+{
+  echo
+  echo "==================== $(date '+%Y-%m-%d %H:%M:%S') :: iniciando ===================="
+} >>"$LOG"
+
+# stdbuf p/ não bufferizar; tudo (stdout+stderr) anexado ao log.
+exec "$NIX_SHELL" --run "ruby deck.rb run deck.yml" >>"$LOG" 2>&1

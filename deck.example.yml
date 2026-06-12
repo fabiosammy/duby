@@ -1,0 +1,102 @@
+# deck.example.yml — example configuration for the FIFINE D6 (3x5 = 15 keys).
+# Copy to deck.yml and adapt:  cp deck.example.yml deck.yml
+# Run with:  nix-shell --run "ruby deck.rb run deck.yml"
+#
+# Key layout (natural index, 0 = top-left):
+#     0   1   2   3   4
+#     5   6   7   8   9
+#    10  11  12  13  14
+#
+# Each key takes ONE visual (precedence: image > icon > text > color):
+#   image:       path to a ready image (relative to this file); fills the key
+#   icon:        freedesktop icon name, OR a list of candidate names to try,
+#                OR a direct file path. Falls back to `text` if none is found.
+#   text:        centered text (font auto-sized); also used as the icon fallback
+#   background:  background color, hex RRGGBB (default 000000)
+#   color:       text color, hex RRGGBB (default ffffff); alone = solid color
+#   font:        (optional) ImageMagick font name/path
+# ...plus:
+#   command:     shell command run when the key is pressed (via /bin/sh -c)
+#
+# NOTE: commands run under a non-interactive `/bin/sh -c`, which does NOT load
+# shell functions from your .bashrc/.zshrc. Helpers like a focus/launch wrapper
+# must be executables on your PATH (see bin/ for a reference implementation).
+
+settings:
+  brightness: 80          # 0-100
+  # res: 126              # optional; confirmed default for the 0x0060
+  # keymap:               # optional: physical pressed index -> config key.
+  #   0: 10               # use `ruby deck.rb listen` to discover the indices
+  #   10: 0
+
+  # Splash screens: shown on start (`welcome`) and when the daemon stops
+  # (`goodbye`), so it's obvious whether the deck is listening.
+  welcome:
+    text: "Hi!"
+    background: "1e1e2e"
+    color: "ffffff"
+  goodbye:
+    text: "Deck OFF"
+    background: "2a0a0a"
+    color: "ff6666"
+    brightness: 25
+
+keys:
+  # ── app icon from the system theme, with a text fallback ───────────────────
+  0:
+    icon: ["firefox", "org.mozilla.firefox", "firefox-esr"]
+    text: "Firefox"        # used if no icon is found in the themes
+    background: "1e1e1e"   # neutral dark so colored logos stand out
+    command: "focus-or-launch firefox firefox"
+
+  1:
+    icon: ["code", "vscode", "visual-studio-code", "com.visualstudio.code"]
+    text: "VS Code"
+    background: "1e1e1e"
+    command: "focus-or-launch code code"
+
+  # ── plain text on a colored background ─────────────────────────────────────
+  2:
+    text: "Slack"
+    background: "4a154b"
+    command: "focus-or-launch slack slack"
+
+  # ── a ready-made image fills the key ───────────────────────────────────────
+  3:
+    image: "mago.png"
+    command: "xdg-open https://example.com &"
+
+  # ── open a web page in the default browser ─────────────────────────────────
+  4:
+    text: "GitHub"
+    background: "24292e"
+    command: "xdg-open https://github.com"
+
+  # ── media / audio (PipeWire) ───────────────────────────────────────────────
+  5:
+    text: "Play/Pause"
+    background: "2e7d32"
+    command: "playerctl play-pause"
+
+  6:
+    text: "Mic Mute"
+    background: "b02e2e"
+    # PipeWire (the right way on modern KDE); pactl as a fallback.
+    command: "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle || pactl set-source-mute @DEFAULT_SOURCE@ toggle"
+
+  # ── KDE Wayland: invoke a KWin shortcut via D-Bus (toggles maximize) ───────
+  7:
+    text: "Maximize"
+    background: "37474f"
+    command: 'gdbus call --session --dest org.kde.kglobalaccel --object-path /component/kwin --method org.kde.kglobalaccel.Component.invokeShortcut "Window Maximize"'
+
+  # ── solid color only (no text), e.g. a quick lock key ──────────────────────
+  10:
+    color: "37474f"
+    command: "loginctl lock-session"
+
+  # ── run a local script ─────────────────────────────────────────────────────
+  14:
+    text: "Restart Screen"
+    background: "c0392b"
+    command: "~/scripts/restart-screen.sh"

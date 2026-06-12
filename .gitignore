@@ -1,0 +1,13 @@
+# runtime / artifacts
+deck.log
+result
+result-*
+
+# python
+__pycache__/
+*.pyc
+
+# editor / os
+*.swp
+*~
+.DS_Store
