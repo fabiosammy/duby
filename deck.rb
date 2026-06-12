@@ -34,11 +34,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 require "yaml"
+require "open3"
 require_relative "lib/fifine_deck"
 
 $stdout.sync = true # file log updates live (no buffering)
 
 DEBOUNCE = 0.20 # s — ignore repeats of the same press within this interval
+FOCUS_POLL = 0.7 # s — how often to check the focused window (for focus_layers)
 
 def mono = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 # CLOCK_BOOTTIME advances during suspend (CLOCK_MONOTONIC does not), so a big
@@ -65,6 +67,35 @@ def wait_for_device(stop_check)
     end
   end
   nil
+end
+
+# Class name of the currently focused window (via kdotool). nil if unavailable.
+def active_window_class
+  id, st = Open3.capture2("kdotool", "getactivewindow", err: File::NULL)
+  return nil unless st.success?
+  id = id.strip
+  return nil if id.empty?
+  cls, st2 = Open3.capture2("kdotool", "getwindowclassname", id, err: File::NULL)
+  return nil unless st2.success?
+  c = cls.strip
+  c.empty? ? nil : c
+rescue StandardError
+  nil
+end
+
+# Maps a window class to a layer name using `focus_layers` (ordered list of
+# [pattern, layer]). First case-insensitive substring match wins; "*" = default.
+def layer_for_class(klass, focus_map)
+  return nil unless klass
+  default = nil
+  focus_map.each do |pat, lname|
+    if pat.to_s == "*"
+      default = lname
+      next
+    end
+    return lname if klass.downcase.include?(pat.to_s.downcase)
+  end
+  default
 end
 
 # KDE (systray) notification. Silent if notify-send is missing.
@@ -192,6 +223,8 @@ def cmd_run(path)
   last = Hash.new(0.0)
   current = 0   # persists across reconnects
   first = true
+  # focus_layers: ordered [pattern, layer] pairs — follow the focused window.
+  focus_map = (cfg[:settings]["focus_layers"] || {}).to_a
 
   # SIGINT (Ctrl-C) and SIGTERM (systemd/session) -> stop the loop and paint goodbye.
   stop = false
@@ -221,6 +254,8 @@ def cmd_run(path)
 
       resumed = false
       tick = boot
+      focus_tick = 0.0
+      last_class = nil
       until stop
         ready = deck.wait_readable(0.3) # wake up to check `stop`
         now = boot
@@ -229,6 +264,25 @@ def cmd_run(path)
           break
         end
         tick = now
+
+        # focus_layers: switch layer to match the focused window (on change only)
+        if focus_map.any? && now - focus_tick >= FOCUS_POLL
+          focus_tick = now
+          klass = active_window_class
+          if klass && klass != last_class
+            last_class = klass
+            lname = layer_for_class(klass, focus_map)
+            ti = lname && resolve_layer(lname, current, cfg[:layers])
+            if ti && ti != current
+              current = ti
+              b = cfg[:layers][current][:brightness]
+              deck.lig(b) if b
+              deck.paint(layers[current])
+              log "focus '#{klass}' → layer '#{cfg[:layers][current][:name]}'"
+            end
+          end
+        end
+
         next unless ready
         idx = deck.read_press
         next unless idx

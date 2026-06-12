@@ -17,6 +17,17 @@ settings:
   welcome: { text: "Hi!",      background: "1e1e2e" }
   goodbye: { text: "Deck OFF", background: "2a0a0a", color: "ff6666", brightness: 25 }
 
+  # Optional: follow the focused window — auto-switch to a layer based on the
+  # active window's class (needs kdotool). First case-insensitive substring
+  # match wins; "*" is the fallback. It only switches when the focused app
+  # changes, so manual layer switches still hold while you stay in the same app.
+  # Discover a window's class with:  kdotool getactivewindow getwindowclassname
+  focus_layers:
+    code: media       # focusing VS Code -> "media" layer (just an example)
+    konsole: apps
+    firefox: media
+    "*": apps         # anything else -> "apps"
+
 layers:
   # ── Layer 1: apps ──────────────────────────────────────────────────────────
   - name: apps

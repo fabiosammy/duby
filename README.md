@@ -127,6 +127,21 @@ layers:
 Switching is repainted in place (no re-init), so it's instant. A plain top-level
 `keys:` still works and is treated as a single layer.
 
+**Follow the focused window.** Add `settings.focus_layers` to auto-switch layers
+based on the active window's class (needs `kdotool`). First case-insensitive
+substring match wins; `"*"` is the fallback. It switches only when the focused
+app changes, so a manual layer switch holds while you stay in that app.
+
+```yaml
+settings:
+  focus_layers:
+    code: dev          # VS Code focused -> "dev" layer
+    wavebox: web
+    "*": home          # anything else -> "home"
+```
+
+Find a window's class with `kdotool getactivewindow getwindowclassname`.
+
 ### Useful command snippets (KDE / PipeWire)
 
 | Action          | Command                                                                                                                                  |
