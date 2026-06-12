@@ -21,16 +21,16 @@
 # IMPORTANT: close OpenDeck first (they fight over the device). Use sudo or the
 # udev rule (41-fifine-d6-0060.rules).
 #
-# ── TODO (things stream decks usually do, left for later) ─────────────────────
+# ── TODO (tracked as GitHub issues — see docs/ROADMAP.md) ─────────────────────
 #   [x] Pages / profiles (layers) — `layers:` + a key with `layer: next|prev|<name>`.
-#   [ ] Per-key on/off state (toggle) with 2 images (e.g. mute on/off).
-#   [ ] Live-reload the YAML when the file changes (file watch).
-#   [ ] systemd (--user) daemon/service to start with the session.
-#   [ ] Text over image (overlay), icon + caption, alignment/font/size.
-#   [ ] Long-press / double-press / key sequences.
-#   [ ] Encoders/dials (the 0x0060 has none, but the Mirabox family does).
-#   [ ] Configurable display map (today the display assumes index == config).
-#   [ ] Visual feedback on press (blink/highlight the key).
+#   [x] systemd (--user) daemon / KDE tray to start with the session.
+#   [ ] #3  Per-key on/off state (toggle) with 2 images (e.g. mute on/off).
+#   [ ] #4  Live-reload the YAML when the file changes (file watch).
+#   [ ] #5  Text over image (overlay), icon + caption, alignment/font/size.
+#   [ ] #6  Long-press / double-press / key sequences.
+#   [ ] #7  Encoders/dials (the 0x0060 has none, but the Mirabox family does).
+#   [ ] #8  Configurable display map (today only a row-flip via FIFINE_FLIP_ROWS).
+#   [ ] #9  Visual feedback on press (blink/highlight the key).
 # ─────────────────────────────────────────────────────────────────────────────
 
 require "yaml"
