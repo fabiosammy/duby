@@ -11,7 +11,6 @@ send SIGTERM to ruby, which triggers the "Deck OFF" screen.
 
 Run via bin/deck-tray-daemon (which enters the nix-shell and forces QT_QPA_PLATFORM=xcb).
 """
-import os
 import signal
 import subprocess
 import sys

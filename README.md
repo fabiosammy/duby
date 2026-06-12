@@ -1,5 +1,7 @@
 # FIFINE D6 — YAML stream deck controller
 
+[![CI](https://github.com/fabiosammy/duby/actions/workflows/ci.yml/badge.svg)](https://github.com/fabiosammy/duby/actions/workflows/ci.yml)
+
 Control a **FIFINE Control Deck / D6** (a rebrand of the Mirabox / HotSpot
 "Stream Dock" family, USB `3142:0060`) directly over `/dev/hidraw` on Linux —
 no vendor app, no OpenDeck. You describe each key in a YAML file (text, an

@@ -1,0 +1,34 @@
+# RuboCop is used here as a bug-catcher (Lint), not a code reformatter: the
+# project intentionally uses compact, script-style Ruby. Stylistic cops that
+# would fight that style are relaxed below; the Lint department stays on.
+
+AllCops:
+  TargetRubyVersion: 3.4
+  NewCops: disable
+  SuggestExtensions: false
+
+# The project uses double quotes for strings, single quotes inside #{...}.
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+Style/StringLiteralsInInterpolation:
+  Enabled: false
+
+# Small single-file CLI scripts — size/complexity limits add noise, not value.
+Metrics:
+  Enabled: false
+
+# Intentional, compact style — keep the code as written.
+Style/Documentation:            { Enabled: false }  # banner comments document each file
+Style/PerlBackrefs:             { Enabled: false }  # $1/$2 read fine in tiny regex blocks
+Style/RescueModifier:           { Enabled: false }  # inline `x rescue y` is deliberate
+Style/Semicolon:                { Enabled: false }  # `a; b` one-liners are deliberate
+Style/CommentedKeyword:         { Enabled: false }  # `end # foo` / `def x = ... # CMD`
+Style/IfUnlessModifier:         { Enabled: false }  # trailing if/unless, contextual
+Style/FormatStringToken:        { Enabled: false }  # printf token style is taste
+Style/TrailingCommaInArrayLiteral: { Enabled: false }
+Style/KeywordParametersOrder:   { Enabled: false }  # required kw after optional, intentional
+Naming/MethodParameterName:     { Enabled: false }  # short names (p, m, s) in tiny methods
+Layout/EmptyLineAfterGuardClause: { Enabled: false }  # compact guard clauses
+Layout/HashAlignment:           { Enabled: false }  # free indentation of multi-line kwargs
+Layout/ExtraSpacing:
+  AllowBeforeTrailingComments: true                  # aligned trailing comments are intentional

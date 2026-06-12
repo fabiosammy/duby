@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ruby:
+    name: Ruby (rubocop + smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+      - name: Install RuboCop
+        run: gem install rubocop -v "~> 1.86"
+      - name: Syntax check
+        run: ruby -c deck.rb && ruby -c probe.rb && ruby -c lib/fifine_deck.rb && ruby -c test/smoke.rb
+      - name: RuboCop
+        run: rubocop
+      - name: Install ImageMagick + font (for render smoke test)
+        run: sudo apt-get update && sudo apt-get install -y imagemagick fonts-dejavu-core
+      - name: Smoke test (render pipeline + example configs)
+        run: ruby test/smoke.rb
+
+  shell:
+    name: Shell (shellcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bash syntax
+        run: for f in bin/deck-daemon bin/deck-stop bin/deck-tray-daemon bin/focus-or-launch; do bash -n "$f"; done
+      - name: ShellCheck
+        run: shellcheck bin/deck-daemon bin/deck-stop bin/deck-tray-daemon bin/focus-or-launch
+
+  python:
+    name: Python (ruff + compile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Syntax check
+        run: python -m py_compile bin/deck-tray
+      - name: Ruff
+        run: pipx run ruff check bin/deck-tray
+
+  yaml:
+    name: YAML (yamllint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: yamllint
+        run: pipx run yamllint deck.example.yml deck.layers.example.yml
+
+  nix:
+    name: Nix (shell.nix)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - name: Validate shell.nix parses
+        run: nix-instantiate --parse shell.nix > /dev/null

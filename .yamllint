@@ -1,0 +1,12 @@
+# Validate YAML structure (indentation, duplicate keys, syntax) but don't
+# nitpick formatting: configs have long shell-command lines and use aligned
+# inline maps for readability.
+extends: default
+
+rules:
+  line-length: disable
+  document-start: disable
+  braces: disable
+  commas: disable
+  comments:
+    min-spaces-from-content: 1

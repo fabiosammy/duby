@@ -368,9 +368,9 @@ def cmd_clear
 end
 
 # ── dispatch ──────────────────────────────────────────────────────────────────
-config_path = ARGV[1] || "deck.yml"
-begin
-  case ARGV[0]
+def main(argv)
+  config_path = argv[1] || "deck.yml"
+  case argv[0]
   when "apply"  then cmd_apply(config_path)
   when "run"    then cmd_run(config_path)
   when "listen" then cmd_listen(config_path)
@@ -384,3 +384,6 @@ rescue Errno::EACCES, Errno::EPERM
 rescue RuntimeError => e
   abort "Error: #{e.message}"
 end
+
+# Run only when executed directly, so `require`/tests can load the helpers.
+main(ARGV) if $PROGRAM_NAME == __FILE__

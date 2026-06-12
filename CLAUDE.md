@@ -63,7 +63,14 @@ ruby -e 'require_relative "lib/fifine_deck"; File.binwrite("/tmp/t.jpg",
 ```
 
 `apply`/`run` render all keys first, then open the device, so render errors
-surface before any hidraw access. There is no automated test suite.
+surface before any hidraw access.
+
+`test/smoke.rb` is the hardware-free test (render pipeline + example configs);
+`deck.rb` guards `main` with `$PROGRAM_NAME == __FILE__` so it can be required.
+CI (`.github/workflows/ci.yml`) runs: RuboCop + `ruby -c` + the smoke test
+(needs ImageMagick + a font), shellcheck (bin/), ruff + py_compile (deck-tray),
+yamllint (example configs), and a `nix-instantiate --parse` of shell.nix.
+Lint configs: `.rubocop.yml` (Lint-focused, style relaxed), `.yamllint`.
 
 ## Gotchas
 
