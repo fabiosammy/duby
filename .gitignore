@@ -6,6 +6,7 @@ result-*
 # personal config (keep only the *.example.yml in the repo)
 deck.yml
 deck.layered.yml
+deck.focus.yml
 
 # local config backups
 *.backup.yml
