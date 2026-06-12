@@ -70,7 +70,9 @@ surface before any hidraw access.
 CI (`.github/workflows/ci.yml`) runs: RuboCop + `ruby -c` + the smoke test
 (needs ImageMagick + a font), shellcheck (bin/), ruff + py_compile (deck-tray),
 yamllint (example configs), and a `nix-instantiate --parse` of shell.nix.
-Lint configs: `.rubocop.yml` (Lint-focused, style relaxed), `.yamllint`.
+Lint configs: `.rubocop.yml` (Lint-focused, style relaxed; `Metrics` enabled as
+a calibrated complexity gate — limits set just above current code as a
+regression guard, tighten/refactor over time), `.yamllint`.
 
 ## Gotchas
 

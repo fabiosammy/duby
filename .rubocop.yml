@@ -13,9 +13,20 @@ Style/StringLiterals:
 Style/StringLiteralsInInterpolation:
   Enabled: false
 
-# Small single-file CLI scripts — size/complexity limits add noise, not value.
-Metrics:
-  Enabled: false
+# Complexity gate (à la Sandi Metz), enabled as a REGRESSION GUARD: limits are
+# set just above today's code (notably the cmd_run supervise loop) so current
+# code passes and any growth is flagged. Tighten over time toward smaller
+# methods. Current ceilings (for reference): cmd_run ABC 123 / cyclo 40 / 106 lines.
+Metrics/MethodLength:           { Max: 110 }
+Metrics/AbcSize:                { Max: 125 }
+Metrics/CyclomaticComplexity:   { Max: 40 }
+Metrics/PerceivedComplexity:    { Max: 44 }
+Metrics/ModuleLength:           { Max: 130 }
+Metrics/BlockLength:            { Max: 40 }
+Metrics/CollectionLiteralLength: { Max: 20 }
+Metrics/BlockNesting:           { Max: 5 }
+Metrics/ParameterLists:
+  CountKeywordArgs: false   # keyword args are self-documenting; the limit targets positional
 
 # Intentional, compact style — keep the code as written.
 Style/Documentation:            { Enabled: false }  # banner comments document each file
