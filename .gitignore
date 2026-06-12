@@ -3,6 +3,10 @@ deck.log
 result
 result-*
 
+# personal config (keep only the *.example.yml in the repo)
+deck.yml
+deck.layered.yml
+
 # local config backups
 *.backup.yml
 

@@ -163,6 +163,11 @@ systemctl --user enable --now deck.service
 Both deliver `SIGTERM` to the Ruby process on stop, which paints the
 "Deck OFF" screen before exiting.
 
+`run` is self-healing: if the device is unplugged/replugged or the laptop is
+suspended and resumed, it waits for the device, re-initializes it and repaints
+the current layer automatically — no need to restart the daemon. (Suspend is
+detected via a CLOCK_BOOTTIME jump between loop iterations.)
+
 > `sudo` inside `nix-shell` loses the Nix `PATH`/environment, so prefer the udev
 > rule over `sudo` for device access.
 

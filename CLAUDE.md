@@ -23,6 +23,8 @@ Linux. See `README.md` for the user-facing docs.
   dispatch, the press loop, welcome/goodbye splashes, signals, notifications.
   Supports `layers:` (pages); a key with `layer: next|prev|<name>|<index>`
   switches via `Deck#paint` (repaint, no re-init). Top-level `keys:` = 1 layer.
+  `run` self-heals: a supervise loop reconnects on unplug and re-inits on
+  suspend/resume (detected via a CLOCK_BOOTTIME jump > RESUME_GAP).
 - `probe.rb` — explorer/debugger built on the lib (`info`/`doctor`/`blink`/
   `probe`/`probe-res`/`orient`/`grid`/`listen`/`raw`) for adapting to other
   Mirabox decks; uses RAW device indices (no row-flip) so it reveals true order.

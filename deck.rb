@@ -41,8 +41,31 @@ $stdout.sync = true # file log updates live (no buffering)
 DEBOUNCE = 0.20 # s — ignore repeats of the same press within this interval
 
 def mono = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+# CLOCK_BOOTTIME advances during suspend (CLOCK_MONOTONIC does not), so a big
+# jump between loop iterations means the laptop was suspended/resumed.
+def boot = Process.clock_gettime(Process::CLOCK_BOOTTIME)
+
+# Errors that mean the device went away (unplugged / suspend / re-enumerated).
+DEVICE_LOST = [EOFError, IOError, SystemCallError].freeze
+RESUME_GAP = 3.0 # s — a loop gap larger than this implies a suspend/resume
 
 def log(msg) = puts("[#{Time.now.strftime('%Y-%m-%d %H:%M:%S')}] #{msg}")
+
+# Open the deck, retrying until it is available (or `stop_check` becomes true).
+# Returns an open Deck, or nil if asked to stop while waiting.
+def wait_for_device(stop_check)
+  announced = false
+  until stop_check.call
+    begin
+      return FifineDeck::Deck.open
+    rescue RuntimeError, IOError, SystemCallError
+      log "Waiting for the FIFINE D6 to be available…" unless announced
+      announced = true
+      sleep 0.5
+    end
+  end
+  nil
+end
 
 # KDE (systray) notification. Silent if notify-send is missing.
 def notify(summary, body = "")
@@ -167,67 +190,97 @@ def cmd_run(path)
   w = cfg[:settings]["welcome"] || {}
   g = cfg[:settings]["goodbye"] || {}
   last = Hash.new(0.0)
-  current = 0
+  current = 0   # persists across reconnects
+  first = true
 
   # SIGINT (Ctrl-C) and SIGTERM (systemd/session) -> stop the loop and paint goodbye.
   stop = false
   %w[INT TERM].each { |sig| trap(sig) { stop = true } }
 
-  FifineDeck::Deck.open do |deck|
-    # welcome
-    show_splash(deck, text: w["text"] || "Hi!",
-                background: (w["background"] || "1e1e2e").to_s,
-                color: (w["color"] || "ffffff").to_s,
-                brightness: brightness, res: res, hold: 1.3)
-    deck.apply_images(layers[current], brightness: brightness)
-    log "Deck on: #{cfg[:layers].size} layer(s); #{layers[current].size} keys on " \
-        "'#{cfg[:layers][current][:name]}'. Listening for presses… (Ctrl-C/SIGTERM to quit)"
-    notify("Deck on", "Listening for FIFINE D6 presses.")
+  # Supervise loop: (re)acquire the device, paint the current layer, listen.
+  # On unplug / suspend-resume the inner loop ends and we reconnect + re-init,
+  # so the daemon keeps running and the deck reloads on its own.
+  until stop
+    deck = wait_for_device(-> { stop })
+    break unless deck
 
-    until stop
-      next unless deck.wait_readable(0.3) # wake up to check `stop`
-      idx = deck.read_press
-      next unless idx
-      ckey = cfg[:keymap].fetch(idx, idx)
-      now = mono
-      next if now - last[ckey] < DEBOUNCE
-      last[ckey] = now
-      spec = cfg[:layers][current][:keys][ckey]
-      label = ckey == idx ? "key #{idx}" : "key #{idx} → config #{ckey}"
-      if spec && spec["layer"]
-        target = resolve_layer(spec["layer"], current, cfg[:layers])
-        if target.nil?
-          log "#{label}: layer '#{spec['layer']}' not found"
-        else
-          current = target
-          b = cfg[:layers][current][:brightness]
-          deck.lig(b) if b
-          deck.paint(layers[current]) # smooth switch (no re-init)
-          log "#{label}: → layer '#{cfg[:layers][current][:name]}'"
-        end
-      elsif spec && spec["command"]
-        log "#{label}: #{spec['command']}"
-        run_command(spec["command"])
-      else
-        log "#{label}: (no command)"
-      end
-    end
-  ensure
-    # very visible "stopped" state: makes it clear ruby is no longer listening.
-    # best-effort: if the device is gone, don't let that mask the original error.
     begin
-      show_splash(deck, text: g["text"] || "Deck OFF",
-                  background: (g["background"] || "2a0a0a").to_s,
-                  color: (g["color"] || "ff6666").to_s,
-                  brightness: g["brightness"] || 25, res: res) if deck
-    rescue StandardError => e
-      log "couldn't paint 'OFF' (#{e.class}: #{e.message})"
+      if first
+        show_splash(deck, text: w["text"] || "Hi!",
+                    background: (w["background"] || "1e1e2e").to_s,
+                    color: (w["color"] || "ffffff").to_s,
+                    brightness: brightness, res: res, hold: 1.3)
+        first = false
+        notify("Deck on", "Listening for FIFINE D6 presses.")
+      else
+        notify("Deck reconnected", "Reloaded the current layer.")
+      end
+      deck.apply_images(layers[current], brightness: brightness)
+      log "Deck ready on layer '#{cfg[:layers][current][:name]}' " \
+          "(#{cfg[:layers].size} layer(s)). Listening… (Ctrl-C/SIGTERM to quit)"
+
+      resumed = false
+      tick = boot
+      until stop
+        ready = deck.wait_readable(0.3) # wake up to check `stop`
+        now = boot
+        if now - tick > RESUME_GAP # process was frozen -> suspend/resume: re-init
+          resumed = true
+          break
+        end
+        tick = now
+        next unless ready
+        idx = deck.read_press
+        next unless idx
+        ckey = cfg[:keymap].fetch(idx, idx)
+        t = mono
+        next if t - last[ckey] < DEBOUNCE
+        last[ckey] = t
+        spec = cfg[:layers][current][:keys][ckey]
+        label = ckey == idx ? "key #{idx}" : "key #{idx} → config #{ckey}"
+        if spec && spec["layer"]
+          target = resolve_layer(spec["layer"], current, cfg[:layers])
+          if target.nil?
+            log "#{label}: layer '#{spec['layer']}' not found"
+          else
+            current = target
+            b = cfg[:layers][current][:brightness]
+            deck.lig(b) if b
+            deck.paint(layers[current]) # smooth switch (no re-init)
+            log "#{label}: → layer '#{cfg[:layers][current][:name]}'"
+          end
+        elsif spec && spec["command"]
+          log "#{label}: #{spec['command']}"
+          run_command(spec["command"])
+        else
+          log "#{label}: (no command)"
+        end
+      end
+
+      if stop
+        # very visible "stopped" state: makes it clear ruby isn't listening.
+        begin
+          show_splash(deck, text: g["text"] || "Deck OFF",
+                      background: (g["background"] || "2a0a0a").to_s,
+                      color: (g["color"] || "ff6666").to_s,
+                      brightness: g["brightness"] || 25, res: res)
+        rescue StandardError => e
+          log "couldn't paint 'OFF' (#{e.class}: #{e.message})"
+        end
+      elsif resumed
+        log "Resume detected; reinitializing the deck…"
+      end
+    rescue *DEVICE_LOST => e
+      log "Device lost (#{e.class}: #{e.message}); waiting to reconnect…"
+      notify("Deck disconnected", "Waiting for the device to come back…")
+      sleep 0.5
+    ensure
+      deck.close rescue nil
     end
-    log "Deck stopped (no longer listening)."
-    notify("Deck off", "Stopped listening for presses.")
   end
-rescue EOFError
-  abort "Device disconnected."
+
+  log "Deck stopped (no longer listening)."
+  notify("Deck off", "Stopped listening for presses.")
 end
 
 def cmd_listen(path)
