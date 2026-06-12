@@ -3,6 +3,9 @@ deck.log
 result
 result-*
 
+# local config backups
+*.backup.yml
+
 # python
 __pycache__/
 *.pyc

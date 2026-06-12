@@ -1,29 +1,16 @@
-# deck.yml — Fabio's personal layout (KDE) for the FIFINE D6.
+# deck.yml — Fabio's personal layout (KDE) for the FIFINE D6, organized in layers.
 # Run with:  nix-shell --run "ruby deck.rb run deck.yml"
 #
-# Layout (natural index, 0 = top-left):
-#     0   1   2   3   4      dev apps
-#     5   6   7   8   9      browsers / web
-#    10  11  12  13  14      web tools + media + system
+# 3 layers, cycled by the bottom-right key (index 14):
+#   apps  ▶  web  ▶  system  ▶  apps
+# A backup of the previous (single-layer) config is in deck.backup.yml:
+#   cp deck.backup.yml deck.yml   # to restore
 #
-# ── PREREQUISITES ─────────────────────────────────────────────────────────────
-# • cycle-or-launch: commands run under `/bin/sh -c`, which does NOT load
-#   functions from your .bashrc/.zshrc. If your cycle-or-launch is a shell
-#   FUNCTION it won't be found. Keep it as an executable on your PATH, e.g.:
-#       install -Dm755 bin/focus-or-launch ~/.local/bin/focus-or-launch
-#   (a reference focus/launch implementation lives in bin/focus-or-launch.)
-# • Web pages open in the default browser via `xdg-open`.
-# • Mic Mute uses wpctl (PipeWire) with a pactl fallback; Maximize uses gdbus
-#   (a KWin shortcut); Lock uses loginctl. Icons (icon:) come from the system theme.
-#
-# Customize as needed (2nd arg of cycle-or-launch = command to open the app):
-#   - RubyMine: adjust if the launcher is not on your PATH (JetBrains Toolbox).
-#   - YT Music: it's a Wavebox app; focus uses the window class. The fallback
-#     opens Wavebox — change the 2nd arg if you want to open the app directly.
+# Prereqs (same as before): cycle-or-launch on PATH; web pages via xdg-open;
+# wpctl/pactl, gdbus, loginctl for the system layer.
 
 settings:
   brightness: 80
-  # Welcome screen (on `run` start) and "stopped" screen (on shutdown):
   welcome:
     text: "Hi!"
     background: "1e1e2e"
@@ -34,90 +21,94 @@ settings:
     color: "ff6666"
     brightness: 25
 
-keys:
-  # ── row 1: dev apps (icon-theme logos; text = fallback) ─────────────────────
-  0:
-    icon: ["org.kde.konsole", "utilities-terminal", "terminal"]
-    text: "Terminal"
-    background: "1e1e1e"
-    command: "cycle-or-launch konsole konsole"
+layers:
+  # ── Layer 1: apps ────────────────────────────────────────────────────────────
+  - name: apps
+    keys:
+      0:
+        icon: ["org.kde.konsole", "utilities-terminal", "terminal"]
+        text: "Terminal"
+        background: "1e1e1e"
+        command: "cycle-or-launch konsole konsole"
+      1:
+        icon: ["code", "vscode", "visual-studio-code", "com.visualstudio.code", "code-oss"]
+        text: "VS Code"
+        background: "1e1e1e"
+        command: "cycle-or-launch code code"
+      2:
+        icon: ["/home/fabiosammy/.nix-profile/ruby-mine/bin/rubymine.png"]
+        text: "RubyMine"
+        background: "1e1e1e"
+        command: "cycle-or-launch rubymine /home/fabiosammy/.nix-profile/ruby-mine/bin/rubymine.sh"
+      3:
+        icon: ["slack"]
+        text: "Slack"
+        background: "1e1e1e"
+        command: "cycle-or-launch slack slack"
+      4:
+        icon: ["1password", "1Password"]
+        text: "1Password"
+        background: "1e1e1e"
+        command: "cycle-or-launch 1password 1password"
+      5:
+        icon: ["firefox", "org.mozilla.firefox", "firefox-esr"]
+        text: "Firefox"
+        background: "1e1e1e"
+        command: "cycle-or-launch firefox firefox"
+      6:
+        icon: ["wavebox"]
+        text: "Wavebox"
+        background: "1e1e1e"
+        command: "cycle-or-launch wavebox wavebox"
+      14:
+        text: "Web ▶"
+        background: "303046"
+        layer: web
 
-  1:
-    icon: ["code", "vscode", "visual-studio-code", "com.visualstudio.code", "code-oss"]
-    text: "VS Code"
-    background: "1e1e1e"
-    command: "cycle-or-launch code code"
+  # ── Layer 2: web ─────────────────────────────────────────────────────────────
+  - name: web
+    keys:
+      0:
+        text: "GitHub"
+        background: "24292e"
+        command: "xdg-open https://github.com/orgs/glssolutions/repositories"
+      1:
+        text: "Datadog"
+        background: "632ca6"
+        command: "xdg-open https://app.datadoghq.com/apm/home"
+      2:
+        text: "Aikido"
+        background: "5849be"
+        command: "xdg-open https://app.aikido.dev/queue"
+      3:
+        text: "YT Music"
+        background: "ff0033"
+        command: "cycle-or-launch wavebox-cinhimbnkkaeohfgghhklpknlkffjgod-Default wavebox"
+      14:
+        text: "Sys ▶"
+        background: "303046"
+        layer: system
 
-  2:
-    icon: ["/home/fabiosammy/.nix-profile/ruby-mine/bin/rubymine.png"]
-    text: "RubyMine"
-    background: "1e1e1e"
-    command: "cycle-or-launch rubymine /home/fabiosammy/.nix-profile/ruby-mine/bin/rubymine.sh"
-
-  3:
-    icon: ["slack"]
-    text: "Slack"
-    background: "1e1e1e"
-    command: "cycle-or-launch slack slack"
-
-  4:
-    icon: ["1password", "1Password"]
-    text: "1Password"
-    background: "1e1e1e"
-    command: "cycle-or-launch 1password 1password"
-
-  # ── row 2: browsers / web ───────────────────────────────────────────────────
-  5:
-    icon: ["firefox", "org.mozilla.firefox", "firefox-esr"]
-    text: "Firefox"
-    background: "1e1e1e"
-    command: "cycle-or-launch firefox firefox"
-
-  6:
-    icon: ["wavebox"]
-    text: "Wavebox"
-    background: "1e1e1e"
-    command: "cycle-or-launch wavebox wavebox"
-
-  7:
-    text: "YT Music"
-    background: "ff0033"
-    command: "cycle-or-launch wavebox-cinhimbnkkaeohfgghhklpknlkffjgod-Default wavebox"
-
-  8:
-    text: "GitHub"
-    background: "24292e"
-    command: "xdg-open https://github.com/orgs/glssolutions/repositories"
-
-  9:
-    text: "Datadog"
-    background: "632ca6"
-    command: "xdg-open https://app.datadoghq.com/apm/home"
-
-  # ── row 3: web tools + media + system ───────────────────────────────────────
-  10:
-    text: "Aikido"
-    background: "5849be"
-    command: "xdg-open https://app.aikido.dev/queue"
-
-  11:
-    text: "Mic Mute"
-    background: "b02e2e"
-    # PipeWire (NixOS/KDE): wpctl is the right path; pactl as a fallback.
-    command: "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle || pactl set-source-mute @DEFAULT_SOURCE@ toggle"
-
-  12:
-    text: "Maximize"
-    background: "2e7d32"
-    # KDE Wayland: invoke the KWin shortcut via D-Bus (toggles maximize/restore).
-    command: 'gdbus call --session --dest org.kde.kglobalaccel --object-path /component/kwin --method org.kde.kglobalaccel.Component.invokeShortcut "Window Maximize"'
-
-  13:
-    text: "Lock"
-    background: "37474f"
-    command: "loginctl lock-session"
-
-  14:
-    text: "Restart Screen"
-    background: "c0392b"
-    command: "~/Desenvolvimento/restart-screen.sh"
+  # ── Layer 3: system ──────────────────────────────────────────────────────────
+  - name: system
+    keys:
+      0:
+        text: "Mic Mute"
+        background: "b02e2e"
+        command: "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle || pactl set-source-mute @DEFAULT_SOURCE@ toggle"
+      1:
+        text: "Maximize"
+        background: "2e7d32"
+        command: 'gdbus call --session --dest org.kde.kglobalaccel --object-path /component/kwin --method org.kde.kglobalaccel.Component.invokeShortcut "Window Maximize"'
+      2:
+        text: "Lock"
+        background: "37474f"
+        command: "loginctl lock-session"
+      3:
+        text: "Restart Screen"
+        background: "c0392b"
+        command: "~/Desenvolvimento/restart-screen.sh"
+      14:
+        text: "◀ Apps"
+        background: "303046"
+        layer: apps
