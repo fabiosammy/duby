@@ -21,6 +21,8 @@ Linux. See `README.md` for the user-facing docs.
     theme icons.
 - `deck.rb` — CLI (`apply`/`run`/`listen`/`clear`), YAML loading, per-key render
   dispatch, the press loop, welcome/goodbye splashes, signals, notifications.
+  Supports `layers:` (pages); a key with `layer: next|prev|<name>|<index>`
+  switches via `Deck#paint` (repaint, no re-init). Top-level `keys:` = 1 layer.
 - `probe.rb` — explorer/debugger built on the lib (`info`/`doctor`/`blink`/
   `probe`/`probe-res`/`orient`/`grid`/`listen`/`raw`) for adapting to other
   Mirabox decks; uses RAW device indices (no row-flip) so it reveals true order.

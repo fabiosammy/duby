@@ -22,7 +22,7 @@
 # udev rule (41-fifine-d6-0060.rules).
 #
 # ── TODO (things stream decks usually do, left for later) ─────────────────────
-#   [ ] Pages / profiles (several 15-key screens, a key to switch).
+#   [x] Pages / profiles (layers) — `layers:` + a key with `layer: next|prev|<name>`.
 #   [ ] Per-key on/off state (toggle) with 2 images (e.g. mute on/off).
 #   [ ] Live-reload the YAML when the file changes (file watch).
 #   [ ] systemd (--user) daemon/service to start with the session.
@@ -73,11 +73,13 @@ def load_config(path)
   settings = raw["settings"] || {}
   base_dir = File.dirname(File.expand_path(path))
 
-  # normalize key indexes to Integer (YAML may give "0" or 0)
-  keys = {}
-  (raw["keys"] || {}).each do |k, spec|
-    next if spec.nil?
-    keys[Integer(k)] = spec
+  # layers: a list of { name, keys }. Backward compatible: a top-level `keys:`
+  # (with no `layers:`) becomes a single layer named "main".
+  raw_layers = raw["layers"] || [{ "name" => "main", "keys" => raw["keys"] || {} }]
+  layers = raw_layers.each_with_index.map do |ly, i|
+    keys = {}
+    (ly["keys"] || {}).each { |k, spec| keys[Integer(k)] = spec unless spec.nil? }
+    { name: (ly["name"] || "layer#{i}").to_s, keys: keys, brightness: ly["brightness"] }
   end
 
   # optional keymap: physical pressed index (0-based, = byte9-1) -> config key.
@@ -85,7 +87,7 @@ def load_config(path)
   keymap = {}
   (settings["keymap"] || {}).each { |from, to| keymap[Integer(from)] = Integer(to) }
 
-  { settings: settings, keys: keys, keymap: keymap, base_dir: base_dir,
+  { settings: settings, layers: layers, keymap: keymap, base_dir: base_dir,
     res: Integer(settings["res"] || FifineDeck::RES) }
 end
 
@@ -117,8 +119,25 @@ def render_spec(spec, base_dir, res)
   end
 end
 
-def render_all(cfg)
-  cfg[:keys].transform_values { |spec| render_spec(spec, cfg[:base_dir], cfg[:res]) }
+# Render each layer's keys to JPEGs: returns an array of { key => jpeg }.
+def render_layers(cfg)
+  cfg[:layers].map do |ly|
+    ly[:keys].transform_values { |spec| render_spec(spec, cfg[:base_dir], cfg[:res]) }
+  end
+end
+
+# Resolve a `layer:` value (next/prev/<name>/<index>) to a layer index, or nil.
+def resolve_layer(val, current, layers)
+  s = val.to_s.strip
+  case s.downcase
+  when "next"             then return (current + 1) % layers.size
+  when "prev", "previous" then return (current - 1) % layers.size
+  end
+  if (idx = layers.index { |ly| ly[:name].casecmp?(s) })
+    return idx
+  end
+  return s.to_i if s.match?(/\A\d+\z/) && s.to_i < layers.size
+  nil
 end
 
 def run_command(cmd)
@@ -132,21 +151,23 @@ end
 # ── commands ──────────────────────────────────────────────────────────────────
 def cmd_apply(path)
   cfg = load_config(path)
-  jpegs = render_all(cfg)
+  layers = render_layers(cfg)
   FifineDeck::Deck.open do |deck|
-    deck.apply_images(jpegs, brightness: cfg[:settings]["brightness"])
+    deck.apply_images(layers.first, brightness: cfg[:settings]["brightness"])
   end
-  puts "Painted #{jpegs.size} key(s)."
+  extra = cfg[:layers].size > 1 ? " (layer '#{cfg[:layers].first[:name]}'; #{cfg[:layers].size} layers total)" : ""
+  puts "Painted #{layers.first.size} key(s)#{extra}."
 end
 
 def cmd_run(path)
   cfg = load_config(path)
   res = cfg[:res]
-  jpegs = render_all(cfg)
+  layers = render_layers(cfg)
   brightness = cfg[:settings]["brightness"]
   w = cfg[:settings]["welcome"] || {}
   g = cfg[:settings]["goodbye"] || {}
   last = Hash.new(0.0)
+  current = 0
 
   # SIGINT (Ctrl-C) and SIGTERM (systemd/session) -> stop the loop and paint goodbye.
   stop = false
@@ -158,8 +179,9 @@ def cmd_run(path)
                 background: (w["background"] || "1e1e2e").to_s,
                 color: (w["color"] || "ffffff").to_s,
                 brightness: brightness, res: res, hold: 1.3)
-    deck.apply_images(jpegs, brightness: brightness)
-    log "Deck on: #{jpegs.size} keys painted. Listening for presses… (Ctrl-C/SIGTERM to quit)"
+    deck.apply_images(layers[current], brightness: brightness)
+    log "Deck on: #{cfg[:layers].size} layer(s); #{layers[current].size} keys on " \
+        "'#{cfg[:layers][current][:name]}'. Listening for presses… (Ctrl-C/SIGTERM to quit)"
     notify("Deck on", "Listening for FIFINE D6 presses.")
 
     until stop
@@ -170,9 +192,20 @@ def cmd_run(path)
       now = mono
       next if now - last[ckey] < DEBOUNCE
       last[ckey] = now
-      spec = cfg[:keys][ckey]
+      spec = cfg[:layers][current][:keys][ckey]
       label = ckey == idx ? "key #{idx}" : "key #{idx} → config #{ckey}"
-      if spec && spec["command"]
+      if spec && spec["layer"]
+        target = resolve_layer(spec["layer"], current, cfg[:layers])
+        if target.nil?
+          log "#{label}: layer '#{spec['layer']}' not found"
+        else
+          current = target
+          b = cfg[:layers][current][:brightness]
+          deck.lig(b) if b
+          deck.paint(layers[current]) # smooth switch (no re-init)
+          log "#{label}: → layer '#{cfg[:layers][current][:name]}'"
+        end
+      elsif spec && spec["command"]
         log "#{label}: #{spec['command']}"
         run_command(spec["command"])
       else

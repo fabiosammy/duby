@@ -105,6 +105,28 @@ A key's visual is chosen by precedence: **`image` > `icon` > `text` > `color`**.
 > must be executables on your `PATH`. A reference implementation using `kdotool`
 > is in [`bin/focus-or-launch`](bin/focus-or-launch).
 
+### Layers (pages)
+
+Define a list of `layers:` instead of a single top-level `keys:`. A key switches
+layers with a `layer:` field (`next`, `prev`, a layer name, or an index) instead
+of running a `command`. Keys not defined in the active layer show blank, and a
+layer may set its own `brightness:`. See [`deck.layers.example.yml`](deck.layers.example.yml).
+
+```yaml
+layers:
+  - name: apps
+    keys:
+      0: { text: "Firefox", command: "focus-or-launch firefox firefox" }
+      4: { text: "Media ▶", background: "303046", layer: next }   # switch key
+  - name: media
+    keys:
+      0: { text: "Play/Pause", command: "playerctl play-pause" }
+      4: { text: "◀ Apps", background: "303046", layer: apps }
+```
+
+Switching is repainted in place (no re-init), so it's instant. A plain top-level
+`keys:` still works and is treated as a single layer.
+
 ### Useful command snippets (KDE / PipeWire)
 
 | Action          | Command                                                                                                                                  |
@@ -216,6 +238,7 @@ deck.rb              CLI runner (apply/run/listen/clear)
 probe.rb             explorer/debugger to adapt to another deck (info/doctor/probe…)
 lib/fifine_deck.rb   device discovery, CRT protocol (read+write), JPEG rendering
 deck.example.yml     commented example config
+deck.layers.example.yml  multi-layer ("pages") example config
 deck.yml             your config (default for the subcommands)
 shell.nix            Nix dev shell (Ruby, ImageMagick, fonts, Python/PySide6)
 bin/

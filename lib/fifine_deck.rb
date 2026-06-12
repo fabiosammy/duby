@@ -198,6 +198,12 @@ module FifineDeck
     def apply_images(jpegs, brightness: nil)
       init!
       lig(brightness) if brightness
+      paint(jpegs)
+    end
+
+    # Repaint keys WITHOUT re-running init (smooth layer switches). Keys absent
+    # from `jpegs` are cleared, so undefined keys go blank on the new layer.
+    def paint(jpegs)
       clear_all
       jpegs.each { |k, jpeg| bat(display_index(k), jpeg.bytesize); chunks(jpeg) }
       finish!

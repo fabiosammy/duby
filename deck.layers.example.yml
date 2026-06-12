@@ -1,0 +1,77 @@
+# deck.layers.example.yml — multi-layer ("pages") example for the FIFINE D6.
+# Run with:  nix-shell --run "ruby deck.rb run deck.layers.example.yml"
+#
+# Instead of a top-level `keys:`, define a list of `layers:`. Each layer has its
+# own `name` and `keys`. A key switches layers with a `layer:` field:
+#   layer: next      -> next layer (wraps around)
+#   layer: prev      -> previous layer (wraps around)
+#   layer: media     -> jump to the layer named "media"
+#   layer: 0         -> jump to layer index 0
+# A key with `layer:` switches instead of running a `command`. Keys not defined
+# in the active layer show blank. Optionally set `brightness:` per layer.
+#
+# (A single top-level `keys:` still works — it's treated as one layer.)
+
+settings:
+  brightness: 80
+  welcome: { text: "Hi!",      background: "1e1e2e" }
+  goodbye: { text: "Deck OFF", background: "2a0a0a", color: "ff6666", brightness: 25 }
+
+layers:
+  # ── Layer 1: apps ──────────────────────────────────────────────────────────
+  - name: apps
+    keys:
+      0:
+        icon: ["firefox", "org.mozilla.firefox"]
+        text: "Firefox"
+        background: "1e1e1e"
+        command: "focus-or-launch firefox firefox"
+      1:
+        text: "Terminal"
+        background: "1b2b1b"
+        command: "focus-or-launch konsole konsole"
+      4:
+        text: "Media ▶"        # switch key (top-right)
+        background: "303046"
+        layer: next
+      9:
+        text: "Sys ▶"          # another way to advance
+        background: "303046"
+        layer: system
+
+  # ── Layer 2: media ─────────────────────────────────────────────────────────
+  - name: media
+    keys:
+      0:
+        text: "Play/Pause"
+        background: "2e7d32"
+        command: "playerctl play-pause"
+      1:
+        text: "Prev"
+        background: "11203a"
+        command: "playerctl previous"
+      2:
+        text: "Next"
+        background: "11203a"
+        command: "playerctl next"
+      4:
+        text: "Sys ▶"
+        background: "303046"
+        layer: next
+
+  # ── Layer 3: system ────────────────────────────────────────────────────────
+  - name: system
+    brightness: 60             # this layer runs a bit dimmer
+    keys:
+      0:
+        text: "Mic Mute"
+        background: "b02e2e"
+        command: "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle || pactl set-source-mute @DEFAULT_SOURCE@ toggle"
+      1:
+        text: "Lock"
+        background: "37474f"
+        command: "loginctl lock-session"
+      4:
+        text: "◀ Apps"         # wraps back to the first layer
+        background: "303046"
+        layer: apps
