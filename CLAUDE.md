@@ -23,8 +23,10 @@ Linux. See `README.md` for the user-facing docs.
   dispatch, the press loop, welcome/goodbye splashes, signals, notifications.
   Supports `layers:` (pages); a key with `layer: next|prev|<name>|<index>`
   switches via `Deck#paint` (repaint, no re-init). Top-level `keys:` = 1 layer.
-  `run` self-heals: a supervise loop reconnects on unplug and re-inits on
-  suspend/resume (detected via a CLOCK_BOOTTIME jump > RESUME_GAP).
+  `run` is driven by the `Runner` class (small methods: `serve`/`listen`/
+  `poll_focus`/`handle_press`/`dispatch`/`switch_layer`); it self-heals — a
+  supervise loop reconnects on unplug and re-inits on suspend/resume (detected
+  via a CLOCK_BOOTTIME jump > RESUME_GAP).
   `settings.focus_layers` (class→layer, needs kdotool) auto-switches the layer
   to follow the focused window; polled every FOCUS_POLL, acts only on change.
 - `probe.rb` — explorer/debugger built on the lib (`info`/`doctor`/`blink`/
@@ -71,8 +73,8 @@ CI (`.github/workflows/ci.yml`) runs: RuboCop + `ruby -c` + the smoke test
 (needs ImageMagick + a font), shellcheck (bin/), ruff + py_compile (deck-tray),
 yamllint (example configs), and a `nix-instantiate --parse` of shell.nix.
 Lint configs: `.rubocop.yml` (Lint-focused, style relaxed; `Metrics` enabled as
-a calibrated complexity gate — limits set just above current code as a
-regression guard, tighten/refactor over time), `.yamllint`.
+a complexity gate near RuboCop defaults after the #1 refactor — keep tightening
+toward defaults as code shrinks), `.yamllint`.
 
 ## Gotchas
 
