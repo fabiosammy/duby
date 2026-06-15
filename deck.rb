@@ -225,35 +225,71 @@ def apply_summary(cfg, count)
   "Painted #{count} key(s)#{extra}."
 end
 
-# Watches logind's PrepareForSleep signal (system bus, via `gdbus monitor`) so
-# the deck can blank with the laptop. `sleeping?` reflects the latest signal;
-# if gdbus/the system bus are unavailable it stays false (feature simply off).
-class SleepMonitor
+# Decides when the deck should blank: while the laptop is asleep (logind
+# PrepareForSleep) or the screen is locked (freedesktop ScreenSaver), watched via
+# `gdbus monitor`. Best-effort — a missing bus/gdbus just leaves that source off.
+class BlankMonitor
   def initialize
     @sleeping = false
-    @io = nil
+    @locked = false
+    @started = false
+    @ios = []
   end
 
-  def sleeping? = @sleeping
-  def awake! = @sleeping = false
+  # Blank the deck while the laptop is asleep OR the screen is locked.
+  def blank? = @started && (@sleeping || @locked)
 
+  # A fresh session means the host is up; clear sleep and re-read the lock level
+  # (covers a lock that started during suspend, when no signal was seen).
+  def awake!
+    return unless @started
+
+    @sleeping = false
+    @locked = screensaver_active?
+  end
+
+  # Watch logind PrepareForSleep (system bus) and the freedesktop ScreenSaver
+  # ActiveChanged signal (session bus) via `gdbus monitor`. Best-effort: a
+  # missing bus/gdbus just leaves that source off.
   def start
-    @io = IO.popen(["gdbus", "monitor", "--system", "--dest", "org.freedesktop.login1",
-                    "--object-path", "/org/freedesktop/login1"], err: File::NULL)
-    Thread.new do
-      @io.each_line { |l| @sleeping = l.include?("true") if l.include?("PrepareForSleep") }
-    rescue IOError
-      nil # pipe closed on shutdown
-    end
-    self
-  rescue StandardError
+    @started = true
+    watch(%w[--system --dest org.freedesktop.login1 --object-path /org/freedesktop/login1],
+          "PrepareForSleep") { |on| @sleeping = on }
+    watch(%w[--session --dest org.freedesktop.ScreenSaver --object-path /org/freedesktop/ScreenSaver],
+          "ActiveChanged") { |on| @locked = on }
     self
   end
 
   def stop
-    Process.kill("TERM", @io.pid) if @io
+    @ios.each { |io| Process.kill("TERM", io.pid) }
   rescue StandardError
     nil
+  end
+
+  private
+
+  # Run `gdbus monitor <args>` in a thread; for each line mentioning `signal`,
+  # yield the boolean it carries. Degrades to off on any failure.
+  def watch(args, signal, &on_change)
+    io = IO.popen(["gdbus", "monitor", *args], err: File::NULL)
+    @ios << io
+    Thread.new do
+      io.each_line { |l| on_change.call(l.include?("true")) if l.include?(signal) }
+    rescue IOError
+      nil # pipe closed on shutdown
+    end
+  rescue StandardError
+    nil
+  end
+
+  # Current screen-lock level via the freedesktop ScreenSaver interface.
+  def screensaver_active?
+    out, st = Open3.capture2("gdbus", "call", "--session", "--dest", "org.freedesktop.ScreenSaver",
+                             "--object-path", "/org/freedesktop/ScreenSaver",
+                             "--method", "org.freedesktop.ScreenSaver.GetActive", err: File::NULL)
+    st.success? && out.include?("true")
+  rescue StandardError
+    false
   end
 end
 
@@ -274,17 +310,17 @@ class Runner
     @current = 0          # current layer index (persists across reconnects)
     @first = true
     @stop = false
-    @blanked = false      # whether the deck is currently blanked for sleep
-    @suspend_blank = cfg[:settings].fetch("suspend_with_laptop", true)
-    @sleep_monitor = SleepMonitor.new
+    @blanked = false      # whether the deck is currently blanked (sleep/lock)
+    @blank_enabled = cfg[:settings].fetch("suspend_with_laptop", true)
+    @blank_monitor = BlankMonitor.new
   end
 
   # SIGINT (Ctrl-C) / SIGTERM (systemd/session) stop the loop; then paint goodbye.
   def run
     %w[INT TERM].each { |sig| trap(sig) { @stop = true } }
-    @sleep_monitor.start if @suspend_blank
+    @blank_monitor.start if @blank_enabled
     serve until @stop
-    @sleep_monitor.stop
+    @blank_monitor.stop
     log "Deck stopped (no longer listening)."
     notify("Deck off", "Stopped listening for presses.")
   end
@@ -330,9 +366,10 @@ class Runner
 
   # Paint the current layer and reset the awake state (a session means we're up).
   def paint_session(deck)
-    @sleep_monitor.awake!
+    @blank_monitor.awake!
     @blanked = false
     deck.apply_images(@layers[@current], brightness: @brightness)
+    apply_blank_state(deck) # stay dark if we woke up still asleep/locked
     log "Deck ready on layer '#{layer_name}' (#{@cfg[:layers].size} layer(s)). " \
         "Listening… (Ctrl-C/SIGTERM to quit)"
   end
@@ -348,25 +385,25 @@ class Runner
       return :resume if now - tick > RESUME_GAP # process was frozen -> re-init
 
       tick = now
-      apply_sleep_state(deck)
+      apply_blank_state(deck)
       poll_focus(deck, now)
       handle_press(deck) if ready
     end
     :stop
   end
 
-  # Blank the deck when the laptop suspends, restore it on wake (the resume gap
-  # also re-inits, so this mainly covers very short suspends).
-  def apply_sleep_state(deck)
-    if @sleep_monitor.sleeping? && !@blanked
+  # Blank the deck while the laptop is asleep or the screen is locked; restore it
+  # on wake/unlock. (Resume also re-inits via the gap path / paint_session.)
+  def apply_blank_state(deck)
+    if @blank_monitor.blank? && !@blanked
       deck.lig(0)
       @blanked = true
-      log "Laptop suspending; deck blanked."
-    elsif !@sleep_monitor.sleeping? && @blanked
+      log "Idle (suspend/lock); deck blanked."
+    elsif !@blank_monitor.blank? && @blanked
       @blanked = false
       deck.lig(@brightness || 80)
       deck.paint(@layers[@current])
-      log "Laptop resumed; deck restored."
+      log "Active again; deck restored."
     end
   end
 
