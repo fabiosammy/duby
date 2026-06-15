@@ -225,6 +225,38 @@ def apply_summary(cfg, count)
   "Painted #{count} key(s)#{extra}."
 end
 
+# Watches logind's PrepareForSleep signal (system bus, via `gdbus monitor`) so
+# the deck can blank with the laptop. `sleeping?` reflects the latest signal;
+# if gdbus/the system bus are unavailable it stays false (feature simply off).
+class SleepMonitor
+  def initialize
+    @sleeping = false
+    @io = nil
+  end
+
+  def sleeping? = @sleeping
+  def awake! = @sleeping = false
+
+  def start
+    @io = IO.popen(["gdbus", "monitor", "--system", "--dest", "org.freedesktop.login1",
+                    "--object-path", "/org/freedesktop/login1"], err: File::NULL)
+    Thread.new do
+      @io.each_line { |l| @sleeping = l.include?("true") if l.include?("PrepareForSleep") }
+    rescue IOError
+      nil # pipe closed on shutdown
+    end
+    self
+  rescue StandardError
+    self
+  end
+
+  def stop
+    Process.kill("TERM", @io.pid) if @io
+  rescue StandardError
+    nil
+  end
+end
+
 # Drives a `run` session: holds the state and supervises the device — reconnects
 # on unplug, re-inits on suspend/resume, follows the focused window, and
 # dispatches key presses. Split into small methods (was one large cmd_run).
@@ -242,12 +274,17 @@ class Runner
     @current = 0          # current layer index (persists across reconnects)
     @first = true
     @stop = false
+    @blanked = false      # whether the deck is currently blanked for sleep
+    @suspend_blank = cfg[:settings].fetch("suspend_with_laptop", true)
+    @sleep_monitor = SleepMonitor.new
   end
 
   # SIGINT (Ctrl-C) / SIGTERM (systemd/session) stop the loop; then paint goodbye.
   def run
     %w[INT TERM].each { |sig| trap(sig) { @stop = true } }
+    @sleep_monitor.start if @suspend_blank
     serve until @stop
+    @sleep_monitor.stop
     log "Deck stopped (no longer listening)."
     notify("Deck off", "Stopped listening for presses.")
   end
@@ -262,9 +299,7 @@ class Runner
 
     begin
       greet(deck)
-      deck.apply_images(@layers[@current], brightness: @brightness)
-      log "Deck ready on layer '#{layer_name}' (#{@cfg[:layers].size} layer(s)). " \
-          "Listening… (Ctrl-C/SIGTERM to quit)"
+      paint_session(deck)
       case listen(deck)
       when :stop   then paint_goodbye(deck)
       when :resume then log "Resume detected; reinitializing the deck…"
@@ -293,6 +328,15 @@ class Runner
     notify("Deck on", "Listening for FIFINE D6 presses.")
   end
 
+  # Paint the current layer and reset the awake state (a session means we're up).
+  def paint_session(deck)
+    @sleep_monitor.awake!
+    @blanked = false
+    deck.apply_images(@layers[@current], brightness: @brightness)
+    log "Deck ready on layer '#{layer_name}' (#{@cfg[:layers].size} layer(s)). " \
+        "Listening… (Ctrl-C/SIGTERM to quit)"
+  end
+
   # Read loop. Returns :stop (quit requested) or :resume (suspend/resume gap).
   def listen(deck)
     tick = boot
@@ -304,10 +348,26 @@ class Runner
       return :resume if now - tick > RESUME_GAP # process was frozen -> re-init
 
       tick = now
+      apply_sleep_state(deck)
       poll_focus(deck, now)
       handle_press(deck) if ready
     end
     :stop
+  end
+
+  # Blank the deck when the laptop suspends, restore it on wake (the resume gap
+  # also re-inits, so this mainly covers very short suspends).
+  def apply_sleep_state(deck)
+    if @sleep_monitor.sleeping? && !@blanked
+      deck.lig(0)
+      @blanked = true
+      log "Laptop suspending; deck blanked."
+    elsif !@sleep_monitor.sleeping? && @blanked
+      @blanked = false
+      deck.lig(@brightness || 80)
+      deck.paint(@layers[@current])
+      log "Laptop resumed; deck restored."
+    end
   end
 
   # Switch the layer to match the focused window, only when the app changes.
