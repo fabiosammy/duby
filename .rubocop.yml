@@ -26,7 +26,6 @@ Metrics/ParameterLists:
   CountKeywordArgs: false   # keyword args are self-documenting; the limit targets positional
 
 # Intentional, compact style — keep the code as written.
-Style/PerlBackrefs:             { Enabled: false }  # $1/$2 read fine in tiny regex blocks
 Style/RescueModifier:           { Enabled: false }  # inline `x rescue y` is deliberate
 Style/Semicolon:                { Enabled: false }  # `a; b` one-liners are deliberate
 Style/CommentedKeyword:         { Enabled: false }  # `end # foo` / `def x = ... # CMD`

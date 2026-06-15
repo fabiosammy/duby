@@ -80,7 +80,7 @@ module FifineDeck
       Dir.glob("/sys/class/hidraw/hidraw*").filter_map do |sys|
         uevent = File.read(File.join(sys, "device/uevent")) rescue next
         next unless uevent =~ /HID_ID=\h+:0*(\h+):0*(\h+)/
-        next unless $1.to_i(16) == vid && $2.to_i(16) == pid
+        next unless ::Regexp.last_match(1).to_i(16) == vid && ::Regexp.last_match(2).to_i(16) == pid
 
         desc = File.binread(File.join(sys, "device/report_descriptor")) rescue "".b
         parse_descriptor(desc).merge(node: "/dev/#{File.basename(sys)}",
@@ -175,8 +175,8 @@ module FifineDeck
 
     def run_step(s)
       if (m = SIMPLE_STEPS[s])  then send(m)
-      elsif s =~ /^lig(\d+)?$/  then lig(($1 || "80").to_i)
-      elsif s =~ /^mod(\d+)?$/  then mod(($1 || "0").to_i)
+      elsif s =~ /^lig(\d+)?$/  then lig((::Regexp.last_match(1) || "80").to_i)
+      elsif s =~ /^mod(\d+)?$/  then mod((::Regexp.last_match(1) || "0").to_i)
       end
       sleep 0.01
     end
