@@ -26,7 +26,9 @@ Linux. See `README.md` for the user-facing docs.
   `run` is driven by the `Runner` class (small methods: `serve`/`listen`/
   `poll_focus`/`handle_press`/`dispatch`/`switch_layer`); it self-heals — a
   supervise loop reconnects on unplug and re-inits on suspend/resume (detected
-  via a CLOCK_BOOTTIME jump > RESUME_GAP).
+  via a CLOCK_BOOTTIME jump > RESUME_GAP). `SleepMonitor` watches logind's
+  `PrepareForSleep` (system bus via `gdbus monitor`) so the deck blanks with the
+  laptop (`settings.suspend_with_laptop`, default true).
   `settings.focus_layers` (class→layer, needs kdotool) auto-switches the layer
   to follow the focused window; polled every FOCUS_POLL, acts only on change.
 - `probe.rb` — explorer/debugger built on the lib (`info`/`doctor`/`blink`/
