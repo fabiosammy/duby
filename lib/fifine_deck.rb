@@ -89,9 +89,7 @@ module FifineDeck
     end
 
     def pick(vid = VID, pid = PID)
-      if FORCED && File.exist?(FORCED)
-        return { node: FORCED, report_id_out: nil, out_bytes: nil, vendor_page: nil }
-      end
+      return { node: FORCED, report_id_out: nil, out_bytes: nil, vendor_page: nil } if FORCED && File.exist?(FORCED)
 
       cands = matching(vid, pid)
       if cands.empty?
