@@ -93,7 +93,7 @@ module FifineDeck
 
       cands = matching(vid, pid)
       if cands.empty?
-        raise "No hidraw for #{format('%04x:%04x', vid, pid)} " \
+        raise "No hidraw for #{format('%<vid>04x:%<pid>04x', vid: vid, pid: pid)} " \
               "(device plugged in? other app closed?)"
       end
       cands.find { |c| c[:vendor_page] } || cands.last
@@ -255,7 +255,7 @@ module FifineDeck
     end
 
     def fc_list
-      out, st = Open3.capture2("fc-list", "-f", "%{file}\n")
+      out, st = Open3.capture2("fc-list", "-f", "%{file}\n") # rubocop:disable Style/FormatStringToken
       st.success? ? out.lines.map(&:strip) : []
     rescue Errno::ENOENT
       []
