@@ -54,7 +54,7 @@ SEQUENCES = [
   { init: %w[dis lig80 han], finish: %w[ulend] },
   { init: %w[dis lig80 han], finish: %w[ulend stp] },
   { init: %w[dis han],       finish: %w[stp] },
-  { init: %w[dis lig80],     finish: %w[stp] }, # baseline mirajazz "293"
+  { init: %w[dis lig80],     finish: %w[stp] } # baseline mirajazz "293"
 ].freeze
 
 def cmd_info
