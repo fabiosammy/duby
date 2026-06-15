@@ -73,10 +73,13 @@ end
 def active_window_class
   id, st = Open3.capture2("kdotool", "getactivewindow", err: File::NULL)
   return nil unless st.success?
+
   id = id.strip
   return nil if id.empty?
+
   cls, st2 = Open3.capture2("kdotool", "getwindowclassname", id, err: File::NULL)
   return nil unless st2.success?
+
   c = cls.strip
   c.empty? ? nil : c
 rescue StandardError
@@ -87,6 +90,7 @@ end
 # [pattern, layer]). First case-insensitive substring match wins; "*" = default.
 def layer_for_class(klass, focus_map)
   return nil unless klass
+
   default = nil
   focus_map.each do |pat, lname|
     if pat.to_s == "*"
@@ -196,11 +200,13 @@ def resolve_layer(val, current, layers)
     return idx
   end
   return s.to_i if s.match?(/\A\d+\z/) && s.to_i < layers.size
+
   nil
 end
 
 def run_command(cmd)
   return if cmd.nil? || cmd.to_s.strip.empty?
+
   pid = Process.spawn("/bin/sh", "-c", cmd.to_s, pgroup: true)
   Process.detach(pid)
 rescue StandardError => e
@@ -375,6 +381,7 @@ def cmd_listen(path)
     loop do
       idx = deck.read_press
       next unless idx
+
       mapped = keymap.fetch(idx, idx)
       extra = mapped == idx ? "" : "  (mapped to config #{mapped})"
       puts "  press: physical index #{idx}#{extra}"

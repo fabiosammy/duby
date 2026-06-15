@@ -81,6 +81,7 @@ module FifineDeck
         uevent = File.read(File.join(sys, "device/uevent")) rescue next
         next unless uevent =~ /HID_ID=\h+:0*(\h+):0*(\h+)/
         next unless $1.to_i(16) == vid && $2.to_i(16) == pid
+
         desc = File.binread(File.join(sys, "device/report_descriptor")) rescue "".b
         parse_descriptor(desc).merge(node: "/dev/#{File.basename(sys)}",
                                      name: uevent[/HID_NAME=(.+)/, 1])
@@ -91,6 +92,7 @@ module FifineDeck
       if FORCED && File.exist?(FORCED)
         return { node: FORCED, report_id_out: nil, out_bytes: nil, vendor_page: nil }
       end
+
       cands = matching(vid, pid)
       if cands.empty?
         raise "No hidraw for #{format('%04x:%04x', vid, pid)} " \
@@ -112,6 +114,7 @@ module FifineDeck
       warn "→ #{d[:node]}  packet=#{pk}  report_id=#{rid}  res=#{RES}"
       deck = new(d[:node], packet: pk, report_id: rid, mode: mode)
       return deck unless block_given?
+
       begin
         yield deck
       ensure
@@ -155,6 +158,7 @@ module FifineDeck
     # arrive natural, so the flip lives only here.
     def display_index(key)
       return key unless FLIP_ROWS
+
       row, col = key.divmod(COLS)
       (ROWS - 1 - row) * COLS + col
     end
@@ -220,8 +224,10 @@ module FifineDeck
       data = @io.readpartial(READ_LEN)
       return nil unless data && data.bytesize >= 11
       return nil unless data.byteslice(0, 3) == "ACK" # 0x41 0x43 0x4B
+
       idx1 = data.getbyte(9) # 1-based; 0 = refresh
       return nil if idx1.nil? || idx1.zero?
+
       idx1 - 1
     end
   end
@@ -234,6 +240,7 @@ module FifineDeck
     # Override with FIFINE_MAGICK.
     def bin
       return @bin if defined?(@bin)
+
       @bin = (ENV["FIFINE_MAGICK"] unless ENV["FIFINE_MAGICK"].to_s.empty?) ||
              %w[magick convert].find { |b| system(b, "-version", out: File::NULL, err: File::NULL) } ||
              "convert"
@@ -244,6 +251,7 @@ module FifineDeck
     # `font (null)`. Order: FIFINE_FONT -> fc-list -> common dirs.
     def font_path
       return @font_path if defined?(@font_path)
+
       @font_path = (ENV["FIFINE_FONT"] unless ENV["FIFINE_FONT"].to_s.empty?) ||
                    pick_font(fc_list) || pick_font(scan_font_dirs)
     end
@@ -274,6 +282,7 @@ module FifineDeck
     def pick_font(list)
       files = list.select { |f| f =~ /\.(ttf|otf)$/i }
       return nil if files.empty?
+
       FONT_PREFS.each { |re| (hit = files.find { |f| f =~ re }) and return hit }
       files.min_by(&:length)
     end
@@ -297,6 +306,7 @@ module FifineDeck
     def convert(*args)
       out, st = Open3.capture2(bin, *args, "-quality", "90", "-strip", "jpg:-", binmode: true)
       raise "ImageMagick (#{bin}) failed — args: #{args.inspect}" unless st.success? && !out.empty?
+
       out
     end
 
@@ -308,6 +318,7 @@ module FifineDeck
     def text(str, background: "000000", color: "ffffff", font: nil, size: RES)
       f = font || font_path
       raise font_help unless f
+
       inner = [size - 14, 16].max
       convert("-size", "#{inner}x#{inner}",
               "-background", "##{background.delete('#')}",
@@ -321,6 +332,7 @@ module FifineDeck
     # Ready image resized to fill the key.
     def image(path, size: RES)
       raise "image not found: #{path}" unless File.exist?(path)
+
       convert(path, "-resize", "#{size}x#{size}!", *orient_args)
     end
 
@@ -340,10 +352,12 @@ module FifineDeck
     # HighContrast/symbolic (monochrome). SVG only if there is no PNG.
     def find_icon(name)
       return name if File.exist?(name)
+
       cands = icon_dirs.flat_map { |d| Dir.glob(File.join(d, "**", "#{name}.{png,svg,PNG,SVG}")) }
       pngs = cands.select { |p| p =~ /\.png$/i }
       pool = pngs.empty? ? cands : pngs
       return nil if pool.empty?
+
       pool.max_by { |p| icon_score(p) }
     end
 

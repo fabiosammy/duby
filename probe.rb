@@ -178,6 +178,7 @@ def cmd_listen
     puts "Press keys to see the physical index (Ctrl-C to stop)."
     loop do
       next unless deck.wait_readable(0.3)
+
       idx = deck.read_press
       puts "  press: physical index #{idx}" if idx
     end
