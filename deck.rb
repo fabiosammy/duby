@@ -157,7 +157,7 @@ def render_spec(spec, base_dir, res)
     render_icon(spec, bg, res)
   elsif (txt = spec["text"])
     FifineDeck::Render.text(txt.to_s, background: bg,
-                            color: (spec["color"] || "ffffff").to_s, font: spec["font"], size: res)
+                                      color: (spec["color"] || "ffffff").to_s, font: spec["font"], size: res)
   elsif (col = spec["color"] || spec["background"])
     FifineDeck::Render.color(col.to_s, size: res)
   else
@@ -278,7 +278,7 @@ class Runner
     return notify("Deck reconnected", "Reloaded the current layer.") unless @first
 
     show_splash(deck, text: @welcome["text"] || "Hi!", background: bg(@welcome, "1e1e2e"),
-                color: fg(@welcome, "ffffff"), brightness: @brightness, res: @res, hold: 1.3)
+                      color: fg(@welcome, "ffffff"), brightness: @brightness, res: @res, hold: 1.3)
     @first = false
     notify("Deck on", "Listening for FIFINE D6 presses.")
   end
@@ -351,7 +351,7 @@ class Runner
   # Very visible "stopped" state: makes it clear ruby isn't listening anymore.
   def paint_goodbye(deck)
     show_splash(deck, text: @goodbye["text"] || "Deck OFF", background: bg(@goodbye, "2a0a0a"),
-                color: fg(@goodbye, "ff6666"), brightness: @goodbye["brightness"] || 25, res: @res)
+                      color: fg(@goodbye, "ff6666"), brightness: @goodbye["brightness"] || 25, res: @res)
   rescue StandardError => e
     log "couldn't paint 'OFF' (#{e.class}: #{e.message})"
   end

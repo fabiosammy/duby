@@ -34,6 +34,5 @@ Style/IfUnlessModifier:         { Enabled: false }  # trailing if/unless, contex
 Style/FormatStringToken:        { Enabled: false }  # printf token style is taste
 Naming/MethodParameterName:     { Enabled: false }  # short names (p, m, s) in tiny methods
 Layout/EmptyLineAfterGuardClause: { Enabled: false }  # compact guard clauses
-Layout/HashAlignment:           { Enabled: false }  # free indentation of multi-line kwargs
 Layout/ExtraSpacing:
   AllowBeforeTrailingComments: true                  # aligned trailing comments are intentional
