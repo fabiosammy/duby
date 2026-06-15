@@ -124,9 +124,7 @@ def show_splash(deck, text:, background:, res:, color: "ffffff", brightness: nil
 end
 
 def load_config(path)
-  unless File.exist?(path)
-    abort "Config not found: #{path}\n(create a deck.yml — see deck.example.yml)"
-  end
+  abort "Config not found: #{path}\n(create a deck.yml — see deck.example.yml)" unless File.exist?(path)
   raw = YAML.safe_load_file(path) || {}
   settings = raw["settings"] || {}
   { settings: settings, layers: parse_layers(raw), keymap: parse_keymap(settings),

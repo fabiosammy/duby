@@ -30,7 +30,6 @@ Style/PerlBackrefs:             { Enabled: false }  # $1/$2 read fine in tiny re
 Style/RescueModifier:           { Enabled: false }  # inline `x rescue y` is deliberate
 Style/Semicolon:                { Enabled: false }  # `a; b` one-liners are deliberate
 Style/CommentedKeyword:         { Enabled: false }  # `end # foo` / `def x = ... # CMD`
-Style/IfUnlessModifier:         { Enabled: false }  # trailing if/unless, contextual
 Style/FormatStringToken:        { Enabled: false }  # printf token style is taste
 Naming/MethodParameterName:     { Enabled: false }  # short names (p, m, s) in tiny methods
 Layout/ExtraSpacing:
