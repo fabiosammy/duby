@@ -109,7 +109,7 @@ end
 
 # Paint a full screen (all keys with `background`, message on the center key).
 # Used for the welcome screen and the "stopped" state on shutdown.
-def show_splash(deck, text:, background:, color: "ffffff", brightness: nil, res:, hold: nil)
+def show_splash(deck, text:, background:, res:, color: "ffffff", brightness: nil, hold: nil)
   bg  = FifineDeck::Render.color(background, size: res)
   msg = FifineDeck::Render.text(text, background: background, color: color, size: res)
   jpegs = {}
