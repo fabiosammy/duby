@@ -274,12 +274,14 @@ class Runner
       notify("Deck disconnected", "Waiting for the device to come back…")
       sleep 0.5
     ensure
-      begin
-        deck.close
-      rescue StandardError
-        nil
-      end
+      close_quietly(deck)
     end
+  end
+
+  def close_quietly(deck)
+    deck.close
+  rescue StandardError
+    nil
   end
 
   def greet(deck)
