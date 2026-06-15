@@ -54,7 +54,8 @@ module FifineDeck
       bytes = desc.bytes
       i = 0
       while i < bytes.length
-        b = bytes[i]; i += 1
+        b = bytes[i]
+        i += 1
         bsize = (b & 0x3) == 3 ? 4 : (b & 0x3)
         val = (bytes[i, bsize] || []).each_with_index.reduce(0) { |a, (x, k)| a | (x << (8 * k)) }
         apply_descriptor_item(st, b & 0xFC, val)
@@ -139,7 +140,8 @@ module FifineDeck
     def write_report(bytes)
       buf = [@rid] + bytes
       buf.fill(0x00, buf.length...(1 + @packet)) if buf.length < 1 + @packet
-      @io.write(buf.pack("C*")); @io.flush
+      @io.write(buf.pack("C*"))
+      @io.flush
     end
 
     def cmd(*tail) = write_report(CRT + tail)
@@ -213,7 +215,10 @@ module FifineDeck
     # from `jpegs` are cleared, so undefined keys go blank on the new layer.
     def paint(jpegs)
       clear_all
-      jpegs.each { |k, jpeg| bat(display_index(k), jpeg.bytesize); chunks(jpeg) }
+      jpegs.each do |k, jpeg|
+        bat(display_index(k), jpeg.bytesize)
+        chunks(jpeg)
+      end
       finish!
     end
 
