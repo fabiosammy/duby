@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# cycle-or-launch <window-class> <command to open...>
+#
+# Like focus-or-launch, but CYCLES through every window of the class: each call
+# activates the window *after* the active one (wrapping around). If none are
+# open, it runs the rest of the arguments to launch the app. E.g.:
+#   cycle-or-launch code code
+#   cycle-or-launch firefox firefox
+#
+# Needs kdotool on PATH. The deck runs commands under `/bin/sh -c` (no shell
+# functions), so install it as an executable on your PATH:
+#   install -Dm755 bin/cycle-or-launch ~/.local/bin/cycle-or-launch
+set -uo pipefail
+
+class="$1"
+shift
+
+mapfile -t wins < <(kdotool search --class "$class" 2>/dev/null)
+
+# No windows of this class -> launch the app.
+if [ "${#wins[@]}" -eq 0 ]; then
+  exec "$@"
+fi
+
+# Pick the window after the currently-active one (wrap around); default to the
+# first if the active window isn't one of them.
+active=$(kdotool getactivewindow 2>/dev/null)
+next="${wins[0]}"
+for i in "${!wins[@]}"; do
+  if [ "${wins[$i]}" = "$active" ]; then
+    next="${wins[$(((i + 1) % ${#wins[@]}))]}"
+    break
+  fi
+done
+
+exec kdotool windowactivate "$next"
