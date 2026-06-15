@@ -35,6 +35,13 @@ check("display_index round-trips within range") do
   d = FifineDeck::Deck.allocate
   (0...FifineDeck::KEYS).map { |k| d.display_index(k) }.sort == (0...FifineDeck::KEYS).to_a
 end
+check("parse_descriptor reads report id / size / vendor page") do
+  # synthetic HID descriptor: Usage Page (vendor FF00), Report Size 8,
+  # Report Count 64, Output -> report_id 0, out_bytes 64, vendor_page true.
+  desc = [0x06, 0x00, 0xFF, 0x75, 0x08, 0x95, 0x40, 0x91, 0x02].pack("C*")
+  FifineDeck::Device.parse_descriptor(desc) ==
+    { report_id_out: 0, out_bytes: 64, vendor_page: true }
+end
 
 # End-to-end: load and render the example configs.
 %w[deck.example.yml deck.layers.example.yml].each do |name|

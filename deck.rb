@@ -125,52 +125,57 @@ def load_config(path)
   end
   raw = YAML.safe_load_file(path) || {}
   settings = raw["settings"] || {}
-  base_dir = File.dirname(File.expand_path(path))
-
-  # layers: a list of { name, keys }. Backward compatible: a top-level `keys:`
-  # (with no `layers:`) becomes a single layer named "main".
-  raw_layers = raw["layers"] || [{ "name" => "main", "keys" => raw["keys"] || {} }]
-  layers = raw_layers.each_with_index.map do |ly, i|
-    keys = {}
-    (ly["keys"] || {}).each { |k, spec| keys[Integer(k)] = spec unless spec.nil? }
-    { name: (ly["name"] || "layer#{i}").to_s, keys: keys, brightness: ly["brightness"] }
-  end
-
-  # optional keymap: physical pressed index (0-based, = byte9-1) -> config key.
-  # Default = identity. Use `listen` to discover the physical index and adjust.
-  keymap = {}
-  (settings["keymap"] || {}).each { |from, to| keymap[Integer(from)] = Integer(to) }
-
-  { settings: settings, layers: layers, keymap: keymap, base_dir: base_dir,
+  { settings: settings, layers: parse_layers(raw), keymap: parse_keymap(settings),
+    base_dir: File.dirname(File.expand_path(path)),
     res: Integer(settings["res"] || FifineDeck::RES) }
+end
+
+# layers: a list of { name, keys }. Backward compatible: a top-level `keys:`
+# (with no `layers:`) becomes a single layer named "main".
+def parse_layers(raw)
+  raw_layers = raw["layers"] || [{ "name" => "main", "keys" => raw["keys"] || {} }]
+  raw_layers.each_with_index.map { |ly, i| build_layer(ly, i) }
+end
+
+def build_layer(layer, idx)
+  keys = {}
+  (layer["keys"] || {}).each { |k, spec| keys[Integer(k)] = spec unless spec.nil? }
+  { name: (layer["name"] || "layer#{idx}").to_s, keys: keys, brightness: layer["brightness"] }
+end
+
+# optional keymap: physical pressed index (0-based) -> config key (identity default).
+def parse_keymap(settings)
+  (settings["keymap"] || {}).each_with_object({}) { |(from, to), m| m[Integer(from)] = Integer(to) }
 end
 
 # Render ONE key's spec to JPEG. Precedence: image > icon > text > color.
 def render_spec(spec, base_dir, res)
   bg = (spec["background"] || "000000").to_s
   if (img = spec["image"])
-    path = File.absolute_path?(img) ? img : File.join(base_dir, img)
-    FifineDeck::Render.image(path, size: res)
-  elsif (ico = spec["icon"])
-    begin
-      FifineDeck::Render.icon(ico, background: bg, size: res)
-    rescue RuntimeError => e
-      warn "  ! #{e.message}\n    -> falling back to text"
-      label = spec["text"] || Array(ico).first
-      FifineDeck::Render.text(label.to_s, background: bg,
-                              color: (spec["color"] || "ffffff").to_s, size: res)
-    end
+    FifineDeck::Render.image(resolve_path(img, base_dir), size: res)
+  elsif spec["icon"]
+    render_icon(spec, bg, res)
   elsif (txt = spec["text"])
-    FifineDeck::Render.text(txt.to_s,
-                            background: (spec["background"] || "000000").to_s,
-                            color:      (spec["color"] || "ffffff").to_s,
-                            font:       spec["font"],
-                            size:       res)
+    FifineDeck::Render.text(txt.to_s, background: bg,
+                            color: (spec["color"] || "ffffff").to_s, font: spec["font"], size: res)
   elsif (col = spec["color"] || spec["background"])
     FifineDeck::Render.color(col.to_s, size: res)
   else
     FifineDeck::Render.color("000000", size: res) # key declared but empty -> black
   end
+end
+
+def resolve_path(path, base_dir)
+  File.absolute_path?(path) ? path : File.join(base_dir, path)
+end
+
+# Render an icon spec, falling back to its text/label if no icon is found.
+def render_icon(spec, bg, res)
+  FifineDeck::Render.icon(spec["icon"], background: bg, size: res)
+rescue RuntimeError => e
+  warn "  ! #{e.message}\n    -> falling back to text"
+  label = spec["text"] || Array(spec["icon"]).first
+  FifineDeck::Render.text(label.to_s, background: bg, color: (spec["color"] || "ffffff").to_s, size: res)
 end
 
 # Render each layer's keys to JPEGs: returns an array of { key => jpeg }.
@@ -206,123 +211,59 @@ end
 def cmd_apply(path)
   cfg = load_config(path)
   layers = render_layers(cfg)
-  FifineDeck::Deck.open do |deck|
-    deck.apply_images(layers.first, brightness: cfg[:settings]["brightness"])
-  end
-  extra = cfg[:layers].size > 1 ? " (layer '#{cfg[:layers].first[:name]}'; #{cfg[:layers].size} layers total)" : ""
-  puts "Painted #{layers.first.size} key(s)#{extra}."
+  FifineDeck::Deck.open { |deck| deck.apply_images(layers.first, brightness: cfg[:settings]["brightness"]) }
+  puts apply_summary(cfg, layers.first.size)
 end
 
-def cmd_run(path)
-  cfg = load_config(path)
-  res = cfg[:res]
-  layers = render_layers(cfg)
-  brightness = cfg[:settings]["brightness"]
-  w = cfg[:settings]["welcome"] || {}
-  g = cfg[:settings]["goodbye"] || {}
-  last = Hash.new(0.0)
-  current = 0   # persists across reconnects
-  first = true
-  # focus_layers: ordered [pattern, layer] pairs — follow the focused window.
-  focus_map = (cfg[:settings]["focus_layers"] || {}).to_a
+def apply_summary(cfg, count)
+  n = cfg[:layers].size
+  extra = n > 1 ? " (layer '#{cfg[:layers].first[:name]}'; #{n} layers total)" : ""
+  "Painted #{count} key(s)#{extra}."
+end
 
-  # SIGINT (Ctrl-C) and SIGTERM (systemd/session) -> stop the loop and paint goodbye.
-  stop = false
-  %w[INT TERM].each { |sig| trap(sig) { stop = true } }
+# Drives a `run` session: holds the state and supervises the device — reconnects
+# on unplug, re-inits on suspend/resume, follows the focused window, and
+# dispatches key presses. Split into small methods (was one large cmd_run).
+class Runner
+  def initialize(cfg)
+    @cfg = cfg
+    @res = cfg[:res]
+    @layers = render_layers(cfg)
+    @brightness = cfg[:settings]["brightness"]
+    @welcome = cfg[:settings]["welcome"] || {}
+    @goodbye = cfg[:settings]["goodbye"] || {}
+    # focus_layers: ordered [pattern, layer] pairs — follow the focused window.
+    @focus_map = (cfg[:settings]["focus_layers"] || {}).to_a
+    @last = Hash.new(0.0) # debounce, per config key
+    @current = 0          # current layer index (persists across reconnects)
+    @first = true
+    @stop = false
+  end
 
-  # Supervise loop: (re)acquire the device, paint the current layer, listen.
-  # On unplug / suspend-resume the inner loop ends and we reconnect + re-init,
-  # so the daemon keeps running and the deck reloads on its own.
-  until stop
-    deck = wait_for_device(-> { stop })
-    break unless deck
+  # SIGINT (Ctrl-C) / SIGTERM (systemd/session) stop the loop; then paint goodbye.
+  def run
+    %w[INT TERM].each { |sig| trap(sig) { @stop = true } }
+    serve until @stop
+    log "Deck stopped (no longer listening)."
+    notify("Deck off", "Stopped listening for presses.")
+  end
+
+  private
+
+  # One device session: (re)acquire, paint the current layer, listen until the
+  # device is lost / stop is requested / a suspend-resume is detected.
+  def serve
+    deck = wait_for_device(-> { @stop })
+    return @stop = true unless deck
 
     begin
-      if first
-        show_splash(deck, text: w["text"] || "Hi!",
-                    background: (w["background"] || "1e1e2e").to_s,
-                    color: (w["color"] || "ffffff").to_s,
-                    brightness: brightness, res: res, hold: 1.3)
-        first = false
-        notify("Deck on", "Listening for FIFINE D6 presses.")
-      else
-        notify("Deck reconnected", "Reloaded the current layer.")
-      end
-      deck.apply_images(layers[current], brightness: brightness)
-      log "Deck ready on layer '#{cfg[:layers][current][:name]}' " \
-          "(#{cfg[:layers].size} layer(s)). Listening… (Ctrl-C/SIGTERM to quit)"
-
-      resumed = false
-      tick = boot
-      focus_tick = 0.0
-      last_class = nil
-      until stop
-        ready = deck.wait_readable(0.3) # wake up to check `stop`
-        now = boot
-        if now - tick > RESUME_GAP # process was frozen -> suspend/resume: re-init
-          resumed = true
-          break
-        end
-        tick = now
-
-        # focus_layers: switch layer to match the focused window (on change only)
-        if focus_map.any? && now - focus_tick >= FOCUS_POLL
-          focus_tick = now
-          klass = active_window_class
-          if klass && klass != last_class
-            last_class = klass
-            lname = layer_for_class(klass, focus_map)
-            ti = lname && resolve_layer(lname, current, cfg[:layers])
-            if ti && ti != current
-              current = ti
-              b = cfg[:layers][current][:brightness]
-              deck.lig(b) if b
-              deck.paint(layers[current])
-              log "focus '#{klass}' → layer '#{cfg[:layers][current][:name]}'"
-            end
-          end
-        end
-
-        next unless ready
-        idx = deck.read_press
-        next unless idx
-        ckey = cfg[:keymap].fetch(idx, idx)
-        t = mono
-        next if t - last[ckey] < DEBOUNCE
-        last[ckey] = t
-        spec = cfg[:layers][current][:keys][ckey]
-        label = ckey == idx ? "key #{idx}" : "key #{idx} → config #{ckey}"
-        if spec && spec["layer"]
-          target = resolve_layer(spec["layer"], current, cfg[:layers])
-          if target.nil?
-            log "#{label}: layer '#{spec['layer']}' not found"
-          else
-            current = target
-            b = cfg[:layers][current][:brightness]
-            deck.lig(b) if b
-            deck.paint(layers[current]) # smooth switch (no re-init)
-            log "#{label}: → layer '#{cfg[:layers][current][:name]}'"
-          end
-        elsif spec && spec["command"]
-          log "#{label}: #{spec['command']}"
-          run_command(spec["command"])
-        else
-          log "#{label}: (no command)"
-        end
-      end
-
-      if stop
-        # very visible "stopped" state: makes it clear ruby isn't listening.
-        begin
-          show_splash(deck, text: g["text"] || "Deck OFF",
-                      background: (g["background"] || "2a0a0a").to_s,
-                      color: (g["color"] || "ff6666").to_s,
-                      brightness: g["brightness"] || 25, res: res)
-        rescue StandardError => e
-          log "couldn't paint 'OFF' (#{e.class}: #{e.message})"
-        end
-      elsif resumed
-        log "Resume detected; reinitializing the deck…"
+      greet(deck)
+      deck.apply_images(@layers[@current], brightness: @brightness)
+      log "Deck ready on layer '#{layer_name}' (#{@cfg[:layers].size} layer(s)). " \
+          "Listening… (Ctrl-C/SIGTERM to quit)"
+      case listen(deck)
+      when :stop   then paint_goodbye(deck)
+      when :resume then log "Resume detected; reinitializing the deck…"
       end
     rescue *DEVICE_LOST => e
       log "Device lost (#{e.class}: #{e.message}); waiting to reconnect…"
@@ -333,8 +274,95 @@ def cmd_run(path)
     end
   end
 
-  log "Deck stopped (no longer listening)."
-  notify("Deck off", "Stopped listening for presses.")
+  def greet(deck)
+    return notify("Deck reconnected", "Reloaded the current layer.") unless @first
+
+    show_splash(deck, text: @welcome["text"] || "Hi!", background: bg(@welcome, "1e1e2e"),
+                color: fg(@welcome, "ffffff"), brightness: @brightness, res: @res, hold: 1.3)
+    @first = false
+    notify("Deck on", "Listening for FIFINE D6 presses.")
+  end
+
+  # Read loop. Returns :stop (quit requested) or :resume (suspend/resume gap).
+  def listen(deck)
+    tick = boot
+    @focus_tick = 0.0
+    @last_class = nil
+    until @stop
+      ready = deck.wait_readable(0.3) # wake up to check @stop
+      now = boot
+      return :resume if now - tick > RESUME_GAP # process was frozen -> re-init
+
+      tick = now
+      poll_focus(deck, now)
+      handle_press(deck) if ready
+    end
+    :stop
+  end
+
+  # Switch the layer to match the focused window, only when the app changes.
+  def poll_focus(deck, now)
+    return if @focus_map.empty? || now - @focus_tick < FOCUS_POLL
+
+    @focus_tick = now
+    klass = active_window_class
+    return if klass.nil? || klass == @last_class
+
+    @last_class = klass
+    name = layer_for_class(klass, @focus_map)
+    target = name && resolve_layer(name, @current, @cfg[:layers])
+    switch_layer(deck, target, "focus '#{klass}'") if target && target != @current
+  end
+
+  def handle_press(deck)
+    idx = deck.read_press
+    return unless idx
+
+    ckey = @cfg[:keymap].fetch(idx, idx)
+    now = mono
+    return if now - @last[ckey] < DEBOUNCE
+
+    @last[ckey] = now
+    dispatch(deck, ckey, idx)
+  end
+
+  def dispatch(deck, ckey, idx)
+    spec = @cfg[:layers][@current][:keys][ckey]
+    label = ckey == idx ? "key #{idx}" : "key #{idx} → config #{ckey}"
+    if spec && spec["layer"]
+      target = resolve_layer(spec["layer"], @current, @cfg[:layers])
+      target ? switch_layer(deck, target, label) : log("#{label}: layer '#{spec['layer']}' not found")
+    elsif spec && spec["command"]
+      log "#{label}: #{spec['command']}"
+      run_command(spec["command"])
+    else
+      log "#{label}: (no command)"
+    end
+  end
+
+  def switch_layer(deck, target, label)
+    @current = target
+    b = @cfg[:layers][@current][:brightness]
+    deck.lig(b) if b
+    deck.paint(@layers[@current]) # smooth switch (no re-init)
+    log "#{label}: → layer '#{layer_name}'"
+  end
+
+  # Very visible "stopped" state: makes it clear ruby isn't listening anymore.
+  def paint_goodbye(deck)
+    show_splash(deck, text: @goodbye["text"] || "Deck OFF", background: bg(@goodbye, "2a0a0a"),
+                color: fg(@goodbye, "ff6666"), brightness: @goodbye["brightness"] || 25, res: @res)
+  rescue StandardError => e
+    log "couldn't paint 'OFF' (#{e.class}: #{e.message})"
+  end
+
+  def layer_name = @cfg[:layers][@current][:name]
+  def bg(spec, default) = (spec["background"] || default).to_s
+  def fg(spec, default) = (spec["color"] || default).to_s
+end
+
+def cmd_run(path)
+  Runner.new(load_config(path)).run
 end
 
 def cmd_listen(path)

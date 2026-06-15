@@ -50,30 +50,30 @@ module FifineDeck
 
     # Minimal HID report descriptor parser -> {report_id_out:, out_bytes:, vendor_page:}
     def parse_descriptor(desc)
+      st = { rsize: 0, rcount: 0, rid: 0, out_rid: nil, out_bytes: nil, vendor: false }
       bytes = desc.bytes
       i = 0
-      rsize = rcount = rid = 0
-      out_rid = out_bytes = nil
-      vendor_page = false
       while i < bytes.length
         b = bytes[i]; i += 1
-        bsize = b & 0x3
-        bsize = 4 if bsize == 3
-        tag = b & 0xFC
-        dat = bytes[i, bsize] || []
-        val = dat.each_with_index.reduce(0) { |a, (x, k)| a | (x << (8 * k)) }
+        bsize = (b & 0x3) == 3 ? 4 : (b & 0x3)
+        val = (bytes[i, bsize] || []).each_with_index.reduce(0) { |a, (x, k)| a | (x << (8 * k)) }
+        apply_descriptor_item(st, b & 0xFC, val)
         i += bsize
-        case tag
-        when 0x04 then vendor_page = true if val >= 0xFF00 # vendor Usage Page
-        when 0x74 then rsize  = val                        # Report Size
-        when 0x94 then rcount = val                        # Report Count
-        when 0x84 then rid    = val                        # Report ID
-        when 0x90, 0x91                                    # Output (main item)
-          out_rid = rid
-          out_bytes = rcount * rsize / 8
-        end
       end
-      { report_id_out: out_rid, out_bytes: out_bytes, vendor_page: vendor_page }
+      { report_id_out: st[:out_rid], out_bytes: st[:out_bytes], vendor_page: st[:vendor] }
+    end
+
+    # Folds one HID item (tag + value) into the parser state `st`.
+    def apply_descriptor_item(st, tag, val)
+      case tag
+      when 0x04 then st[:vendor] = true if val >= 0xFF00 # vendor Usage Page
+      when 0x74 then st[:rsize]  = val                   # Report Size
+      when 0x94 then st[:rcount] = val                   # Report Count
+      when 0x84 then st[:rid]    = val                   # Report ID
+      when 0x90, 0x91                                     # Output (main item)
+        st[:out_rid]   = st[:rid]
+        st[:out_bytes] = st[:rcount] * st[:rsize] / 8
+      end
     end
 
     def matching(vid = VID, pid = PID)
@@ -167,16 +167,14 @@ module FifineDeck
       end
     end
 
+    # init/finish step name -> method (the parameterised lig/mod are handled below)
+    SIMPLE_STEPS = { "dis" => :dis, "han" => :han, "connect" => :connect,
+                     "stp" => :stp, "ulend" => :ulend, "cle" => :clear_all }.freeze
+
     def run_step(s)
-      case s
-      when "dis"          then dis
-      when /^lig(\d+)?$/  then lig(($1 || "80").to_i)
-      when "han"          then han
-      when "connect"      then connect
-      when /^mod(\d+)?$/  then mod(($1 || "0").to_i)
-      when "stp"          then stp
-      when "ulend"        then ulend
-      when "cle"          then clear_all
+      if (m = SIMPLE_STEPS[s])  then send(m)
+      elsif s =~ /^lig(\d+)?$/  then lig(($1 || "80").to_i)
+      elsif s =~ /^mod(\d+)?$/  then mod(($1 || "0").to_i)
       end
       sleep 0.01
     end
@@ -265,14 +263,19 @@ module FifineDeck
       end
     end
 
+    # Preferred font filename patterns, best first (regular sans families).
+    FONT_PREFS = [
+      /DejaVuSans\.ttf$/i,
+      /(LiberationSans-Regular|NotoSans-Regular|FreeSans)\.(ttf|otf)$/i,
+      %r{/[^/]*sans[^/]*regular[^/]*\.(ttf|otf)$}i
+    ].freeze
+
     # Prefers a known regular sans; otherwise the shortest name (the base family).
     def pick_font(list)
       files = list.select { |f| f =~ /\.(ttf|otf)$/i }
       return nil if files.empty?
-      files.find { |f| f =~ /DejaVuSans\.ttf$/i } ||
-        files.find { |f| f =~ /(LiberationSans-Regular|NotoSans-Regular|FreeSans)\.(ttf|otf)$/i } ||
-        files.find { |f| f =~ %r{/[^/]*sans[^/]*regular[^/]*\.(ttf|otf)$}i } ||
-        files.min_by(&:length)
+      FONT_PREFS.each { |re| (hit = files.find { |f| f =~ re }) and return hit }
+      files.min_by(&:length)
     end
 
     def font_help

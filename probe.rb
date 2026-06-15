@@ -81,19 +81,29 @@ def cmd_doctor
   c   = cands.find { |x| x[:vendor_page] } || cands.last
   pk  = D::ENV_PACKET   || c[:out_bytes] || 512
   rid = D::ENV_REPORTID || c[:report_id_out] || 0
-  puts "✓ node        : #{c[:node]}  (#{c[:name]})"
+  doctor_detected(c, pk, rid)
+  doctor_checklist
+  doctor_env_template(pk, rid)
+end
+
+def doctor_detected(cand, pk, rid)
+  puts "✓ node        : #{cand[:node]}  (#{cand[:name]})"
   puts "✓ report id   : #{rid}   (auto)"
   puts "✓ packet size : #{pk} bytes   (auto)"
-  puts "✓ vendor page : #{c[:vendor_page]}"
-  puts
-  puts "Visual checks to run (watch the deck):"
+  puts "✓ vendor page : #{cand[:vendor_page]}"
+end
+
+def doctor_checklist
+  puts "\nVisual checks to run (watch the deck):"
   puts "  1) blink      — writing works at all? (backlight should pulse)"
   puts "  2) probe      — which init/finish sequence lights a key?"
   puts "  3) probe-res  — which JPEG resolution fills a key cleanly?"
   puts "  4) orient     — tune FIFINE_ROT/MIRROR until the 'F' is upright"
   puts "  5) grid + listen — map DISPLAY vs PRESS indices (set FIFINE_FLIP_ROWS / keymap)"
-  puts
-  puts "Suggested starting env (adjust as you learn):"
+end
+
+def doctor_env_template(pk, rid)
+  puts "\nSuggested starting env (adjust as you learn):"
   puts "  export FIFINE_VID=#{format('0x%04x', D::VID)} FIFINE_PID=#{format('0x%04x', D::PID)}"
   puts "  export FIFINE_PACKET=#{pk} FIFINE_REPORTID=#{rid}"
   puts "  export FIFINE_RES=126 FIFINE_ROT=0 FIFINE_MIRROR=none FIFINE_FLIP_ROWS=0"
@@ -142,21 +152,25 @@ def cmd_orient(key = 0)
   puts "  upside down -> FIFINE_ROT=180 | sideways -> 90/270 | mirrored -> FIFINE_MIRROR=x|y|both"
 end
 
+GRID_PALETTE = %w[FF0000 00FF00 0000FF FFFF00 FF00FF 00FFFF FF8000 8000FF
+                  FFFFFF 808080 800000 008000 000080 808000 008080].freeze
+
 def cmd_grid
-  palette = %w[FF0000 00FF00 0000FF FFFF00 FF00FF 00FFFF FF8000 8000FF
-               FFFFFF 808080 800000 008000 000080 808000 008080]
   D::Deck.open do |deck|
     D::INIT_SEQ.each { |s| deck.run_step(s) }
     deck.clear_all
-    D::KEYS.times do |k|
-      j = D::Render.color(palette[k % palette.size])
-      deck.bat(k, j.bytesize) # RAW device index (no flip) — reveals the display order
-      deck.chunks(j)
-    end
+    # RAW device index (no flip) — reveals the device's display order.
+    D::KEYS.times { |k| paint_raw(deck, k, GRID_PALETTE[k % GRID_PALETTE.size]) }
     D::FIN_SEQ.each { |s| deck.run_step(s) }
   end
   puts "Device index 0=red 1=green 2=blue 3=yellow ... — note where each lands physically."
   puts "If top/bottom rows are swapped vs a natural layout, FIFINE_FLIP_ROWS=1 fixes deck.rb."
+end
+
+def paint_raw(deck, key, hex)
+  jpeg = D::Render.color(hex)
+  deck.bat(key, jpeg.bytesize)
+  deck.chunks(jpeg)
 end
 
 def cmd_listen
