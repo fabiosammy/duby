@@ -60,7 +60,7 @@ SEQUENCES = [
 def cmd_info
   cands = D::Device.matching
   if cands.empty?
-    puts "No #{format('%04x:%04x', D::VID, D::PID)} hidraw found (plugged in? other app closed?)"
+    puts "No #{format('%<vid>04x:%<pid>04x', vid: D::VID, pid: D::PID)} hidraw found (plugged in? other app closed?)"
     return
   end
   cands.each do |c|
@@ -72,7 +72,7 @@ end
 
 def cmd_doctor
   puts "── deck doctor ──"
-  puts "Target VID:PID = #{format('%04x:%04x', D::VID, D::PID)} (override: FIFINE_VID/FIFINE_PID)"
+  puts "Target VID:PID = #{format('%<vid>04x:%<pid>04x', vid: D::VID, pid: D::PID)} (override: FIFINE_VID/FIFINE_PID)"
   cands = D::Device.matching
   if cands.empty?
     puts "✗ No matching hidraw. Plug the device, close other apps, check udev/sudo."
@@ -104,7 +104,7 @@ end
 
 def doctor_env_template(pk, rid)
   puts "\nSuggested starting env (adjust as you learn):"
-  puts "  export FIFINE_VID=#{format('0x%04x', D::VID)} FIFINE_PID=#{format('0x%04x', D::PID)}"
+  puts "  export FIFINE_VID=#{format('0x%<v>04x', v: D::VID)} FIFINE_PID=#{format('0x%<v>04x', v: D::PID)}"
   puts "  export FIFINE_PACKET=#{pk} FIFINE_REPORTID=#{rid}"
   puts "  export FIFINE_RES=126 FIFINE_ROT=0 FIFINE_MIRROR=none FIFINE_FLIP_ROWS=0"
   puts "  export FIFINE_INIT=dis,lig0,han FIFINE_FINISH=ulend,stp"
