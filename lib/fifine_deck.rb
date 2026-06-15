@@ -78,11 +78,19 @@ module FifineDeck
 
     def matching(vid = VID, pid = PID)
       Dir.glob("/sys/class/hidraw/hidraw*").filter_map do |sys|
-        uevent = File.read(File.join(sys, "device/uevent")) rescue next
+        uevent = begin
+          File.read(File.join(sys, "device/uevent"))
+        rescue StandardError
+          next
+        end
         next unless uevent =~ /HID_ID=\h+:0*(\h+):0*(\h+)/
         next unless ::Regexp.last_match(1).to_i(16) == vid && ::Regexp.last_match(2).to_i(16) == pid
 
-        desc = File.binread(File.join(sys, "device/report_descriptor")) rescue "".b
+        desc = begin
+          File.binread(File.join(sys, "device/report_descriptor"))
+        rescue StandardError
+          "".b
+        end
         parse_descriptor(desc).merge(node: "/dev/#{File.basename(sys)}",
                                      name: uevent[/HID_NAME=(.+)/, 1])
       end
