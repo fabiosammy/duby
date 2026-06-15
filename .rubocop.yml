@@ -1,6 +1,6 @@
-# RuboCop is used here as a bug-catcher (Lint), not a code reformatter: the
-# project intentionally uses compact, script-style Ruby. Stylistic cops that
-# would fight that style are relaxed below; the Lint department stays on.
+# RuboCop config. Every cop is enabled (none disabled); only a few settings are
+# tuned: double-quoted strings, keyword args excluded from the parameter-list
+# limit, and a complexity gate (Metrics) kept close to the defaults.
 
 AllCops:
   TargetRubyVersion: 3.4
@@ -13,8 +13,7 @@ Style/StringLiterals:
 
 # Complexity gate (à la Sandi Metz). After the #1 refactor (cmd_run → Runner
 # class of small methods) these limits sit close to RuboCop's defaults (shown in
-# brackets); keep tightening toward them as the code shrinks. BlockLength and
-# BlockNesting are back at their defaults.
+# brackets); keep tightening toward them as the code shrinks.
 Metrics/MethodLength:           { Max: 18 }   # default 10
 Metrics/AbcSize:                { Max: 21 }   # default 17
 Metrics/CyclomaticComplexity:   { Max: 8 }    # default 7
@@ -24,5 +23,3 @@ Metrics/ModuleLength:           { Max: 115 }  # default 100
 Metrics/CollectionLiteralLength: { Max: 20 }
 Metrics/ParameterLists:
   CountKeywordArgs: false   # keyword args are self-documenting; the limit targets positional
-
-# Intentional, compact style — keep the code as written.
