@@ -10,8 +10,6 @@ AllCops:
 # The project uses double quotes for strings, single quotes inside #{...}.
 Style/StringLiterals:
   EnforcedStyle: double_quotes
-Style/StringLiteralsInInterpolation:
-  Enabled: false
 
 # Complexity gate (à la Sandi Metz). After the #1 refactor (cmd_run → Runner
 # class of small methods) these limits sit close to RuboCop's defaults (shown in
