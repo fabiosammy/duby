@@ -274,7 +274,8 @@ bin/
   deck-stop          stop the daemon cleanly (paints "Deck OFF")
   deck-tray          KDE system-tray app (PySide6) that supervises the listener
   deck-tray-daemon   launch the tray inside nix-shell
-  focus-or-launch    reference kdotool focus/launch helper
+  focus-or-launch    reference kdotool focus-or-launch helper
+  cycle-or-launch    reference kdotool helper: cycle windows of a class, else launch
 deck.desktop         KDE autostart entry
 systemd/deck.service systemd --user unit
 ```
