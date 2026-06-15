@@ -65,15 +65,15 @@ module FifineDeck
     end
 
     # Folds one HID item (tag + value) into the parser state `st`.
-    def apply_descriptor_item(st, tag, val)
+    def apply_descriptor_item(state, tag, val)
       case tag
-      when 0x04 then st[:vendor] = true if val >= 0xFF00 # vendor Usage Page
-      when 0x74 then st[:rsize]  = val                   # Report Size
-      when 0x94 then st[:rcount] = val                   # Report Count
-      when 0x84 then st[:rid]    = val                   # Report ID
+      when 0x04 then state[:vendor] = true if val >= 0xFF00 # vendor Usage Page
+      when 0x74 then state[:rsize]  = val                   # Report Size
+      when 0x94 then state[:rcount] = val                   # Report Count
+      when 0x84 then state[:rid]    = val                   # Report ID
       when 0x90, 0x91 # Output (main item)
-        st[:out_rid]   = st[:rid]
-        st[:out_bytes] = st[:rcount] * st[:rsize] / 8
+        state[:out_rid]   = state[:rid]
+        state[:out_bytes] = state[:rcount] * state[:rsize] / 8
       end
     end
 
@@ -148,11 +148,11 @@ module FifineDeck
 
     # named commands
     # DIS
-    def dis     = cmd(0x44, 0x49, 0x53)
+    def dis = cmd(0x44, 0x49, 0x53)
     # LIG <pct>
-    def lig(p)  = cmd(0x4C, 0x49, 0x47, 0x00, 0x00, p.clamp(0, 100))
+    def lig(pct)  = cmd(0x4C, 0x49, 0x47, 0x00, 0x00, pct.clamp(0, 100))
     # MOD
-    def mod(m)  = cmd(0x4D, 0x4F, 0x44, 0x00, 0x00, 0x30 + m)
+    def mod(mode) = cmd(0x4D, 0x4F, 0x44, 0x00, 0x00, 0x30 + mode)
     # STP
     def stp     = cmd(0x53, 0x54, 0x50)
     # ULEND
@@ -191,10 +191,10 @@ module FifineDeck
     SIMPLE_STEPS = { "dis" => :dis, "han" => :han, "connect" => :connect,
                      "stp" => :stp, "ulend" => :ulend, "cle" => :clear_all }.freeze
 
-    def run_step(s)
-      if (m = SIMPLE_STEPS[s])  then send(m)
-      elsif s =~ /^lig(\d+)?$/  then lig((::Regexp.last_match(1) || "80").to_i)
-      elsif s =~ /^mod(\d+)?$/  then mod((::Regexp.last_match(1) || "0").to_i)
+    def run_step(step)
+      if (m = SIMPLE_STEPS[step])  then send(m)
+      elsif step =~ /^lig(\d+)?$/  then lig((::Regexp.last_match(1) || "80").to_i)
+      elsif step =~ /^mod(\d+)?$/  then mod((::Regexp.last_match(1) || "0").to_i)
       end
       sleep 0.01
     end

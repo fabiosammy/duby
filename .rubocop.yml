@@ -26,4 +26,3 @@ Metrics/ParameterLists:
   CountKeywordArgs: false   # keyword args are self-documenting; the limit targets positional
 
 # Intentional, compact style — keep the code as written.
-Naming/MethodParameterName:     { Enabled: false }  # short names (p, m, s) in tiny methods

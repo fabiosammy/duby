@@ -172,12 +172,12 @@ def resolve_path(path, base_dir)
 end
 
 # Render an icon spec, falling back to its text/label if no icon is found.
-def render_icon(spec, bg, res)
-  FifineDeck::Render.icon(spec["icon"], background: bg, size: res)
+def render_icon(spec, background, res)
+  FifineDeck::Render.icon(spec["icon"], background: background, size: res)
 rescue RuntimeError => e
   warn "  ! #{e.message}\n    -> falling back to text"
   label = spec["text"] || Array(spec["icon"]).first
-  FifineDeck::Render.text(label.to_s, background: bg, color: (spec["color"] || "ffffff").to_s, size: res)
+  FifineDeck::Render.text(label.to_s, background: background, color: (spec["color"] || "ffffff").to_s, size: res)
 end
 
 # Render each layer's keys to JPEGs: returns an array of { key => jpeg }.

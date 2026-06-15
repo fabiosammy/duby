@@ -86,10 +86,10 @@ def cmd_doctor
   doctor_env_template(pk, rid)
 end
 
-def doctor_detected(cand, pk, rid)
+def doctor_detected(cand, packet, rid)
   puts "✓ node        : #{cand[:node]}  (#{cand[:name]})"
   puts "✓ report id   : #{rid}   (auto)"
-  puts "✓ packet size : #{pk} bytes   (auto)"
+  puts "✓ packet size : #{packet} bytes   (auto)"
   puts "✓ vendor page : #{cand[:vendor_page]}"
 end
 
@@ -102,10 +102,10 @@ def doctor_checklist
   puts "  5) grid + listen — map DISPLAY vs PRESS indices (set FIFINE_FLIP_ROWS / keymap)"
 end
 
-def doctor_env_template(pk, rid)
+def doctor_env_template(packet, rid)
   puts "\nSuggested starting env (adjust as you learn):"
   puts "  export FIFINE_VID=#{format('0x%<v>04x', v: D::VID)} FIFINE_PID=#{format('0x%<v>04x', v: D::PID)}"
-  puts "  export FIFINE_PACKET=#{pk} FIFINE_REPORTID=#{rid}"
+  puts "  export FIFINE_PACKET=#{packet} FIFINE_REPORTID=#{rid}"
   puts "  export FIFINE_RES=126 FIFINE_ROT=0 FIFINE_MIRROR=none FIFINE_FLIP_ROWS=0"
   puts "  export FIFINE_INIT=dis,lig0,han FIFINE_FINISH=ulend,stp"
   puts "  export FIFINE_ROWS=3 FIFINE_COLS=5 FIFINE_KEYS=15"
