@@ -4,21 +4,18 @@ Tracked work for this project, exported from the in-code TODOs and from the
 lint/complexity rules that were relaxed to ship CI green. Each item links to its
 GitHub issue and points at the relevant code.
 
-## Tech debt (quality)
+## Tech debt (quality) — done ✅
 
-These come from rules that are currently **disabled or relaxed** in the lint
-config so the existing style/complexity passes CI.
+| # | Item | Outcome |
+| - | ---- | ------- |
+| [#1](https://github.com/fabiosammy/duby/issues/1) | Reduce method complexity and tighten the RuboCop `Metrics` gate | `cmd_run` → `Runner` class; gate lowered toward defaults (cyclo 40→8, len 110→18) |
+| [#2](https://github.com/fabiosammy/duby/issues/2) | Revisit relaxed RuboCop / yamllint rules | `Style/KeywordParametersOrder` re-enabled; yamllint relaxations removed (long commands folded with `>-`, line-length=100, `---`/block maps) |
 
-| # | Item | Where |
-| - | ---- | ----- |
-| [#1](https://github.com/fabiosammy/duby/issues/1) | Reduce method complexity (`cmd_run` et al.) and tighten the RuboCop `Metrics` gate | `.rubocop.yml` (Metrics), `deck.rb` (`cmd_run`) |
-| [#2](https://github.com/fabiosammy/duby/issues/2) | Revisit relaxed RuboCop / yamllint rules (fix `Style/KeywordParametersOrder`, decide keep-vs-fix for the rest) | `.rubocop.yml`, `.yamllint` |
-
-The `Metrics` department is on only as a **regression guard**: limits sit just
-above today's code. Worst offender: `cmd_run` (ABC 123, cyclomatic 40, 106
-lines vs RuboCop defaults 17 / 7 / 10). The path is to extract a `Session`
-object and break up the other hot spots, then lower the `Max` values toward the
-defaults. See #1 for the full list and steps.
+The remaining relaxed RuboCop cops (`PerlBackrefs`, `RescueModifier`, `Semicolon`,
+`CommentedKeyword`, `IfUnlessModifier`, `StringLiteralsInInterpolation`,
+`FormatStringToken`, `Naming/MethodParameterName`, `Layout/EmptyLineAfterGuardClause`,
+`Layout/HashAlignment`) are deliberate for this compact script and documented
+inline in `.rubocop.yml`.
 
 ## Features (from the `deck.rb` TODO header)
 
