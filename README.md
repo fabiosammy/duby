@@ -185,9 +185,11 @@ suspended and resumed, it waits for the device, re-initializes it and repaints
 the current layer automatically — no need to restart the daemon. (Suspend is
 detected via a CLOCK_BOOTTIME jump between loop iterations.)
 
-It also **sleeps with the laptop**: it watches logind's `PrepareForSleep`
-signal (system bus, via `gdbus`) and blanks the deck (brightness 0) when the
-laptop suspends, restoring it on wake. Disable with `settings.suspend_with_laptop: false`.
+It also **blanks when you step away**: it watches logind's `PrepareForSleep`
+(system bus) and the freedesktop `ScreenSaver` `ActiveChanged` signal (session
+bus) via `gdbus`, and turns the deck off (brightness 0) when the laptop suspends
+**or the screen locks**, restoring it on wake/unlock. Disable with
+`settings.suspend_with_laptop: false`.
 
 > `sudo` inside `nix-shell` loses the Nix `PATH`/environment, so prefer the udev
 > rule over `sudo` for device access.

@@ -25,7 +25,7 @@
 ---
 settings:
   brightness: 80          # 0-100
-  # suspend_with_laptop: true   # blank the deck when the laptop suspends (default true)
+  # suspend_with_laptop: true   # blank the deck on suspend AND screen-lock (default true)
   # res: 126              # optional; confirmed default for the 0x0060
   # keymap:               # optional: physical pressed index -> config key.
   #   0: 10               # use `ruby deck.rb listen` to discover the indices
