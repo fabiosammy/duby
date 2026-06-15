@@ -26,7 +26,7 @@ module FifineDeck
   # Defaults (overridable via ENV, identical to fifine_d6_deck.rb)
   VID    = Integer(ENV.fetch("FIFINE_VID", "0x3142"))
   PID    = Integer(ENV.fetch("FIFINE_PID", "0x0060"))
-  RES    = Integer(ENV.fetch("FIFINE_RES", "126"))   # confirmed combo on the 0x0060
+  RES    = Integer(ENV.fetch("FIFINE_RES", "126")) # confirmed combo on the 0x0060
   ROWS   = Integer(ENV.fetch("FIFINE_ROWS", "3"))
   COLS   = Integer(ENV.fetch("FIFINE_COLS", "5"))
   KEYS   = Integer(ENV.fetch("FIFINE_KEYS", (ROWS * COLS).to_s)) # 3x5 = 15
@@ -70,7 +70,7 @@ module FifineDeck
       when 0x74 then st[:rsize]  = val                   # Report Size
       when 0x94 then st[:rcount] = val                   # Report Count
       when 0x84 then st[:rid]    = val                   # Report ID
-      when 0x90, 0x91                                     # Output (main item)
+      when 0x90, 0x91 # Output (main item)
         st[:out_rid]   = st[:rid]
         st[:out_bytes] = st[:rcount] * st[:rsize] / 8
       end
@@ -360,7 +360,7 @@ module FifineDeck
     end
 
     def icon_score(path)
-      s = path[/(\d+)x\d+/, 1].to_i           # size in px (0 = scalable/no size)
+      s = path[/(\d+)x\d+/, 1].to_i # size in px (0 = scalable/no size)
       s = 384 if s.zero?
       s += 4000 if path =~ %r{/hicolor/}i
       s += 2000 if path =~ /(Papirus|breeze|Adwaita)/i
