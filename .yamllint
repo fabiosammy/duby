@@ -1,12 +1,7 @@
-# Validate YAML structure (indentation, duplicate keys, syntax) but don't
-# nitpick formatting: configs have long shell-command lines and use aligned
-# inline maps for readability.
+# Mostly the defaults; only line length is widened to a common 100-col standard
+# (long shell commands in configs are folded with `>-` to stay within it).
 extends: default
 
 rules:
-  line-length: disable
-  document-start: disable
-  braces: disable
-  commas: disable
-  comments:
-    min-spaces-from-content: 1
+  line-length:
+    max: 100

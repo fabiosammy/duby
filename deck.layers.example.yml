@@ -12,10 +12,17 @@
 #
 # (A single top-level `keys:` still works — it's treated as one layer.)
 
+---
 settings:
   brightness: 80
-  welcome: { text: "Hi!",      background: "1e1e2e" }
-  goodbye: { text: "Deck OFF", background: "2a0a0a", color: "ff6666", brightness: 25 }
+  welcome:
+    text: "Hi!"
+    background: "1e1e2e"
+  goodbye:
+    text: "Deck OFF"
+    background: "2a0a0a"
+    color: "ff6666"
+    brightness: 25
 
   # Optional: follow the focused window — auto-switch to a layer based on the
   # active window's class (needs kdotool). First case-insensitive substring
@@ -77,7 +84,9 @@ layers:
       0:
         text: "Mic Mute"
         background: "b02e2e"
-        command: "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle || pactl set-source-mute @DEFAULT_SOURCE@ toggle"
+        command: >-
+          wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle ||
+          pactl set-source-mute @DEFAULT_SOURCE@ toggle
       1:
         text: "Lock"
         background: "37474f"
