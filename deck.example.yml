@@ -94,9 +94,8 @@ keys:
     text: "Maximize"
     background: "37474f"
     command: >-
-      gdbus call --session --dest org.kde.kglobalaccel
-      --object-path /component/kwin --method
-      org.kde.kglobalaccel.Component.invokeShortcut "Window Maximize"
+      busctl --user call org.kde.kglobalaccel /component/kwin
+      org.kde.kglobalaccel.Component invokeShortcut s "Window Maximize"
 
   # ── solid color only (no text), e.g. a quick lock key ──────────────────────
   10:

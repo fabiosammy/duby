@@ -149,7 +149,7 @@ Find a window's class with `kdotool getactivewindow getwindowclassname`.
 | Action          | Command                                                                                                                                  |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Mic mute toggle | `wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle \|\| pactl set-source-mute @DEFAULT_SOURCE@ toggle`                                         |
-| Maximize window | `gdbus call --session --dest org.kde.kglobalaccel --object-path /component/kwin --method org.kde.kglobalaccel.Component.invokeShortcut "Window Maximize"` |
+| Maximize window | `busctl --user call org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component invokeShortcut s "Window Maximize"` |
 | Lock session    | `loginctl lock-session`                                                                                                                  |
 | Open a page     | `xdg-open https://example.com`                                                                                                           |
 

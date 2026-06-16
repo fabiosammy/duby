@@ -26,6 +26,6 @@ WantedBy=graphical-session.target
 #   journalctl --user -u deck -f         # (in addition to deck.log in the directory)
 #   systemctl --user stop deck.service   # paints "Deck OFF" and exits
 #
-# If kdotool/gdbus/notify-send fail under the service (missing session env):
+# If kdotool/busctl/notify-send fail under the service (missing session env):
 #   systemctl --user import-environment PATH WAYLAND_DISPLAY DISPLAY \
 #     DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR
