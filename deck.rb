@@ -225,69 +225,61 @@ def apply_summary(cfg, count)
   "Painted #{count} key(s)#{extra}."
 end
 
-# Decides when the deck should blank: while the laptop is asleep (logind
-# PrepareForSleep) or the screen is locked (freedesktop ScreenSaver), watched via
-# `gdbus monitor`. Best-effort — a missing bus/gdbus just leaves that source off.
+# Decides when the deck should blank: while the session is locked. Polls logind's
+# LockedHint via `loginctl` (always present) — covers screen-lock directly and
+# suspend indirectly (KDE locks on suspend). Off if no logind session is found.
 class BlankMonitor
+  POLL = 1.0 # seconds between loginctl reads
+
   def initialize
-    @sleeping = false
+    @session = nil
+    @enabled = false
     @locked = false
-    @started = false
-    @ios = []
+    @checked_at = 0.0
   end
 
-  # Blank the deck while the laptop is asleep OR the screen is locked.
-  def blank? = @started && (@sleeping || @locked)
-
-  # A fresh session means the host is up; clear sleep and re-read the lock level
-  # (covers a lock that started during suspend, when no signal was seen).
-  def awake!
-    return unless @started
-
-    @sleeping = false
-    @locked = screensaver_active?
-  end
-
-  # Watch logind PrepareForSleep (system bus) and the freedesktop ScreenSaver
-  # ActiveChanged signal (session bus) via `gdbus monitor`. Best-effort: a
-  # missing bus/gdbus just leaves that source off.
+  # Resolve the logind session once; the feature is off if we can't find one.
   def start
-    @started = true
-    watch(%w[--system --dest org.freedesktop.login1 --object-path /org/freedesktop/login1],
-          "PrepareForSleep") { |on| @sleeping = on }
-    watch(%w[--session --dest org.freedesktop.ScreenSaver --object-path /org/freedesktop/ScreenSaver],
-          "ActiveChanged") { |on| @locked = on }
+    @session = current_session
+    @enabled = !@session.to_s.empty?
     self
   end
 
-  def stop
-    @ios.each { |io| Process.kill("TERM", io.pid) }
-  rescue StandardError
-    nil
+  # No background process to clean up (loginctl is polled on demand).
+  def stop = nil
+
+  # True while the session is locked (covers screen-lock directly and suspend
+  # indirectly, since KDE locks on suspend). Reads logind's LockedHint via
+  # `loginctl`, throttled to once per POLL seconds; cached in between.
+  def blank?
+    return false unless @enabled
+
+    now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    if now - @checked_at >= POLL
+      @checked_at = now
+      @locked = locked_hint?
+    end
+    @locked
   end
+
+  # Force a fresh read on the next poll (e.g. right after resume).
+  def awake! = @checked_at = 0.0
 
   private
 
-  # Run `gdbus monitor <args>` in a thread; for each line mentioning `signal`,
-  # yield the boolean it carries. Degrades to off on any failure.
-  def watch(args, signal, &on_change)
-    io = IO.popen(["gdbus", "monitor", *args], err: File::NULL)
-    @ios << io
-    Thread.new do
-      io.each_line { |l| on_change.call(l.include?("true")) if l.include?(signal) }
-    rescue IOError
-      nil # pipe closed on shutdown
-    end
+  def current_session
+    id = ENV["XDG_SESSION_ID"]
+    return id unless id.to_s.empty?
+
+    out, st = Open3.capture2("loginctl", "show-user", Process.uid.to_s, "-p", "Display", "--value")
+    st.success? ? out.strip : nil
   rescue StandardError
     nil
   end
 
-  # Current screen-lock level via the freedesktop ScreenSaver interface.
-  def screensaver_active?
-    out, st = Open3.capture2("gdbus", "call", "--session", "--dest", "org.freedesktop.ScreenSaver",
-                             "--object-path", "/org/freedesktop/ScreenSaver",
-                             "--method", "org.freedesktop.ScreenSaver.GetActive", err: File::NULL)
-    st.success? && out.include?("true")
+  def locked_hint?
+    out, st = Open3.capture2("loginctl", "show-session", @session.to_s, "-p", "LockedHint", "--value")
+    st.success? && out.strip == "yes"
   rescue StandardError
     false
   end

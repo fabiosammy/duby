@@ -26,10 +26,10 @@ Linux. See `README.md` for the user-facing docs.
   `run` is driven by the `Runner` class (small methods: `serve`/`listen`/
   `poll_focus`/`handle_press`/`dispatch`/`switch_layer`); it self-heals — a
   supervise loop reconnects on unplug and re-inits on suspend/resume (detected
-  via a CLOCK_BOOTTIME jump > RESUME_GAP). `BlankMonitor` watches logind's
-  `PrepareForSleep` (system bus) and freedesktop `ScreenSaver` `ActiveChanged`
-  (session bus) via `gdbus monitor`, so the deck blanks on suspend OR screen-lock
-  (`settings.suspend_with_laptop`, default true).
+  via a CLOCK_BOOTTIME jump > RESUME_GAP). `BlankMonitor` polls logind's
+  `LockedHint` via `loginctl` (no gdbus), so the deck blanks while the session is
+  locked — covering screen-lock and lock-on-suspend (`settings.suspend_with_laptop`,
+  default true).
   `settings.focus_layers` (class→layer, needs kdotool) auto-switches the layer
   to follow the focused window; polled every FOCUS_POLL, acts only on change.
 - `probe.rb` — explorer/debugger built on the lib (`info`/`doctor`/`blink`/
