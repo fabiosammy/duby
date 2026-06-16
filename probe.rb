@@ -31,6 +31,8 @@ USAGE = <<~TXT
     ruby probe.rb orient [key]    paint an "F" to reveal rotation/mirror
     ruby probe.rb grid            paint each key a color (map DISPLAY indices)
     ruby probe.rb listen          print pressed indices (map PRESS indices)
+    ruby probe.rb blank [name]    try a way to fully turn the deck "off" (no name = sweep all)
+    ruby probe.rb wake            restore brightness (undo a blank)
     ruby probe.rb raw 43 52 ...   send one raw report (hex bytes)
 
   Override the target with FIFINE_VID / FIFINE_PID. New deck? start with
@@ -192,6 +194,83 @@ def cmd_raw(hexbytes)
   D::Deck.open { |deck| deck.write_report(bytes) }
 end
 
+# Ways to try to fully turn the deck "off" — `lig(0)` only dims on some units.
+BLANK_STRATEGIES = [
+  ["lig0",       "brightness 0"],
+  ["clear",      "clear all keys"],
+  ["clear-lig0", "clear all keys + brightness 0"],
+  ["black",      "paint every key solid black + brightness 0"],
+  ["dis",        "DIS (reset) command"],
+  ["mod0",       "mode 0"],
+  ["mod1",       "mode 1"]
+].freeze
+
+# Apply one blank strategy to an already-initialized deck.
+def apply_blank(deck, name)
+  case name
+  when "lig0"        then deck.lig(0)
+  when "clear"       then clear_commit(deck)
+  when "clear-lig0"  then blank_clear_lig0(deck)
+  when "black"       then blank_black(deck)
+  when "dis"         then deck.dis
+  when /\Amod(\d+)\z/ then deck.mod(Regexp.last_match(1).to_i)
+  else abort "unknown blank strategy: #{name}"
+  end
+end
+
+def clear_commit(deck)
+  deck.clear_all
+  deck.finish!
+end
+
+def blank_clear_lig0(deck)
+  clear_commit(deck)
+  deck.lig(0)
+end
+
+def blank_black(deck)
+  deck.clear_all
+  jpeg = D::Render.color("000000")
+  D::KEYS.times do |k|
+    deck.bat(k, jpeg.bytesize)
+    deck.chunks(jpeg)
+  end
+  deck.finish!
+  deck.lig(0)
+end
+
+def cmd_blank(name)
+  D::Deck.open do |deck|
+    if name && name != "all"
+      deck.init!
+      apply_blank(deck, name)
+      puts "Applied '#{name}'. Not fully dark? try another, or `wake` to restore."
+    else
+      sweep_blank(deck)
+    end
+  end
+rescue Interrupt
+  puts "\n(stopped)"
+end
+
+def sweep_blank(deck)
+  BLANK_STRATEGIES.each do |name, desc|
+    deck.init!
+    apply_blank(deck, name)
+    print "  #{name.ljust(11)} (#{desc}) — fully dark now? [Enter=next, Ctrl-C=this one] "
+    $stdin.gets
+  end
+  puts "Tell me which one went fully dark and I'll use it for lock/suspend."
+end
+
+def cmd_wake
+  D::Deck.open do |deck|
+    deck.init!
+    deck.lig(80)
+  end
+  puts "Brightness restored to 80 (re-run your deck config to repaint keys)."
+end
+
 begin
   case ARGV[0]
   when "info"      then cmd_info
@@ -202,6 +281,8 @@ begin
   when "orient"    then cmd_orient(ARGV[1] ? Integer(ARGV[1]) : 0)
   when "grid"      then cmd_grid
   when "listen"    then cmd_listen
+  when "blank"     then cmd_blank(ARGV[1])
+  when "wake"      then cmd_wake
   when "raw"       then cmd_raw(ARGV[1..])
   else puts USAGE
   end
