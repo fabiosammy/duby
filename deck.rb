@@ -123,6 +123,22 @@ def show_splash(deck, text:, background:, res:, color: "ffffff", brightness: nil
   sleep hold if hold
 end
 
+# Turn the deck "off". `lig(0)` only dims on some units, so the default clears
+# all keys (which goes fully dark). `black` paints every key black + dims; `lig0`
+# is the brightness-only fallback.
+def blank_deck(deck, method, res)
+  case method
+  when "lig0" then deck.lig(0)
+  when "black"
+    jpeg = FifineDeck::Render.color("000000", size: res)
+    deck.paint((0...FifineDeck::KEYS).to_h { |k| [k, jpeg] })
+    deck.lig(0)
+  else
+    deck.clear_all
+    deck.finish!
+  end
+end
+
 def load_config(path)
   abort "Config not found: #{path}\n(create a deck.yml — see deck.example.yml)" unless File.exist?(path)
   raw = YAML.safe_load_file(path) || {}
@@ -290,20 +306,22 @@ end
 # dispatches key presses. Split into small methods (was one large cmd_run).
 class Runner
   def initialize(cfg)
+    settings = cfg[:settings]
     @cfg = cfg
     @res = cfg[:res]
     @layers = render_layers(cfg)
-    @brightness = cfg[:settings]["brightness"]
-    @welcome = cfg[:settings]["welcome"] || {}
-    @goodbye = cfg[:settings]["goodbye"] || {}
+    @brightness = settings["brightness"]
+    @welcome = settings["welcome"] || {}
+    @goodbye = settings["goodbye"] || {}
     # focus_layers: ordered [pattern, layer] pairs — follow the focused window.
-    @focus_map = (cfg[:settings]["focus_layers"] || {}).to_a
+    @focus_map = (settings["focus_layers"] || {}).to_a
     @last = Hash.new(0.0) # debounce, per config key
     @current = 0          # current layer index (persists across reconnects)
     @first = true
     @stop = false
     @blanked = false      # whether the deck is currently blanked (sleep/lock)
-    @blank_enabled = cfg[:settings].fetch("suspend_with_laptop", true)
+    @blank_enabled = settings.fetch("suspend_with_laptop", true)
+    @blank_method = settings.fetch("blank_method", "clear") # clear | black | lig0
     @blank_monitor = BlankMonitor.new
   end
 
@@ -388,9 +406,9 @@ class Runner
   # on wake/unlock. (Resume also re-inits via the gap path / paint_session.)
   def apply_blank_state(deck)
     if @blank_monitor.blank? && !@blanked
-      deck.lig(0)
+      blank_deck(deck, @blank_method, @res)
       @blanked = true
-      log "Idle (suspend/lock); deck blanked."
+      log "Idle (suspend/lock); deck blanked (#{@blank_method})."
     elsif !@blank_monitor.blank? && @blanked
       @blanked = false
       deck.lig(@brightness || 80)

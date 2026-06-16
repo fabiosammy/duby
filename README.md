@@ -188,8 +188,10 @@ detected via a CLOCK_BOOTTIME jump between loop iterations.)
 It also **blanks when you step away**: it polls logind's `LockedHint` (via
 `loginctl`, always present) and turns the deck off (brightness 0) while the
 session is locked — covering screen-lock directly and suspend indirectly (KDE
-locks on suspend). It restores on unlock. Disable with
-`settings.suspend_with_laptop: false`.
+locks on suspend). It restores on unlock. How it blanks is set by
+`settings.blank_method`: `clear` (default — clears the keys, goes fully dark),
+`black` (paint every key black + dim), or `lig0` (brightness only — only dims on
+some units). Disable the whole thing with `settings.suspend_with_laptop: false`.
 
 > `sudo` inside `nix-shell` loses the Nix `PATH`/environment, so prefer the udev
 > rule over `sudo` for device access.
