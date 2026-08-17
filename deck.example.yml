@@ -17,6 +17,8 @@
 #   font:        (optional) ImageMagick font name/path
 # ...plus:
 #   command:     shell command run when the key is pressed (via /bin/sh -c)
+#   status:      make the key mirror external state (see keys 8, 9 and 13)
+#   track:       with `status:`, follow the key's OWN command (busy/done/error)
 #
 # NOTE: commands run under a non-interactive `/bin/sh -c`, which does NOT load
 # shell functions from your .bashrc/.zshrc. Helpers like a focus/launch wrapper
@@ -96,6 +98,54 @@ keys:
     command: >-
       busctl --user call org.kde.kglobalaccel /component/kwin
       org.kde.kglobalaccel.Component invokeShortcut s "Window Maximize"
+
+  # ── status key: mirror a state FILE written by someone else ────────────────
+  # Whoever knows the state writes its name into the file ("busy", "done"…):
+  # a Claude Code hook, a CI script, a systemd ExecStartPost… Each state
+  # inherits this key's visual, so `busy` below keeps the "Claude" text.
+  # `hold:` reverts to the base image after N seconds.
+  8:
+    text: "Claude"
+    background: "1e1e2e"
+    command: "focus-or-launch kitty kitty"
+    status:
+      source:
+        file: "~/.cache/duby/claude.state"
+        # glob: "~/.cache/duby/claude/*.state"   # aggregate several sessions
+        # priority: [error, attention, busy, done]
+      states:
+        busy: {text: "···", background: "3a2f00", color: "ffcc00"}
+        attention: {text: "?", background: "2a1a00", color: "ffaa00"}
+        done: {text: "✓", background: "0a2a0a", color: "66ff66", hold: 5}
+        error: {text: "✗", background: "2a0a0a", color: "ff6666", hold: 5}
+
+  # ── status key: follow the key's OWN command (`track: true`) ───────────────
+  9:
+    text: "Backup"
+    background: "1e3a5f"
+    command: "~/scripts/backup.sh"
+    track: true
+    status:
+      states:
+        busy: {text: "···", background: "3a2f00", color: "ffcc00"}
+        done: {text: "✓", background: "0a2a0a", color: "66ff66", hold: 5}
+        error: {text: "✗", background: "2a0a0a", color: "ff6666", hold: 5}
+
+  # ── status key: poll a command; its EXIT STATUS picks the state ────────────
+  # (with no `success:`/`failure:` the command's stdout is the state name)
+  13:
+    text: "Mic"
+    background: "1e1e1e"
+    command: "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"
+    status:
+      source:
+        poll: "wpctl get-volume @DEFAULT_AUDIO_SOURCE@ | grep -q MUTED"
+        interval: 1
+        success: muted
+        failure: live
+      states:
+        muted: {text: "Mic OFF", background: "b02e2e"}
+        live: {text: "Mic ON", background: "2e7d32"}
 
   # ── solid color only (no text), e.g. a quick lock key ──────────────────────
   10:

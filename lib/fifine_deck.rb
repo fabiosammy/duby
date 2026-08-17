@@ -230,6 +230,15 @@ module FifineDeck
       finish!
     end
 
+    # Repaint ONE key, leaving every other key alone. A full-size image covers
+    # the key, so no CLE is needed — and `paint` can't be used here because it
+    # starts with `clear_all`, which would blank the rest of the layer.
+    def paint_key(key, jpeg)
+      bat(display_index(key), jpeg.bytesize)
+      chunks(jpeg)
+      finish!
+    end
+
     # ── Key-press reading ────────────────────────────────────────────────────
     # Waits up to `timeout` seconds for data to read. Returns true if there is
     # something to read, false on timeout. Lets the loop check flags (e.g. stop).

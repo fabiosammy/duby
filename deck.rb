@@ -24,6 +24,7 @@
 # ── TODO (tracked as GitHub issues — see docs/ROADMAP.md) ─────────────────────
 #   [x] Pages / profiles (layers) — `layers:` + a key with `layer: next|prev|<name>`.
 #   [x] systemd (--user) daemon / KDE tray to start with the session.
+#   [x] #52 Status keys — a key that mirrors external state (`status:`/`track:`).
 #   [ ] #3  Per-key on/off state (toggle) with 2 images (e.g. mute on/off).
 #   [ ] #4  Live-reload the YAML when the file changes (file watch).
 #   [ ] #5  Text over image (overlay), icon + caption, alignment/font/size.
@@ -33,6 +34,7 @@
 #   [ ] #9  Visual feedback on press (blink/highlight the key).
 # ─────────────────────────────────────────────────────────────────────────────
 
+require "English" # $CHILD_STATUS (tracked processes)
 require "yaml"
 require "open3"
 require_relative "lib/fifine_deck"
@@ -219,12 +221,277 @@ def resolve_layer(val, current, layers)
 end
 
 def run_command(cmd)
-  return if cmd.nil? || cmd.to_s.strip.empty?
+  pid = spawn_command(cmd)
+  Process.detach(pid) if pid
+end
 
-  pid = Process.spawn("/bin/sh", "-c", cmd.to_s, pgroup: true)
-  Process.detach(pid)
+# Spawn a key's command and return its pid (no detach, so a tracked key can
+# reap it). nil if there is nothing to run or the spawn failed.
+def spawn_command(cmd)
+  return nil if cmd.nil? || cmd.to_s.strip.empty?
+
+  Process.spawn("/bin/sh", "-c", cmd.to_s, pgroup: true)
 rescue StandardError => e
   warn "  ! failed to run #{cmd.inspect}: #{e.message}"
+  nil
+end
+
+# ── status keys ───────────────────────────────────────────────────────────────
+# A status key mirrors something that happens OUTSIDE the deck (a build, a CI
+# job, a Claude Code session): it pre-renders one image per state and swaps them
+# on the device as the state changes. Where the state name comes from:
+#   file:  / glob: — read it from a state file (push model: whoever knows the
+#                    state writes the file — a hook, a script, a systemd unit)
+#   poll:          — a shell command, run every `interval` seconds
+#   track: true    — the key's own command; busy while it runs, then done/error
+
+# A state spec inherits the key's own visual (background, font…). When the state
+# names its own image/icon/text, the key's other selectors are dropped, so the
+# precedence (image > icon > text) can't make the base visual win over it.
+VISUAL_FIELDS = %w[image icon text color background font].freeze
+VISUAL_SELECTORS = %w[image icon text].freeze
+
+def merge_state(spec, state)
+  inherited = spec.slice(*VISUAL_FIELDS)
+  inherited = inherited.except(*VISUAL_SELECTORS) if VISUAL_SELECTORS.any? { |f| state.key?(f) }
+  inherited.merge(state.slice(*VISUAL_FIELDS))
+end
+
+# State from a file whose content IS the state name ("busy", "done"…). `glob`
+# aggregates several files (e.g. one per session): the first state of `priority`
+# that any file reports wins.
+class FileSource
+  DEFAULT_INTERVAL = 0.5 # s — a tiny read, but no need to do it every tick
+
+  def initialize(spec, priority)
+    @path = expand(spec["file"])
+    @glob = expand(spec["glob"])
+    @priority = priority
+    @interval = Float(spec["interval"] || DEFAULT_INTERVAL)
+    @tick = -Float::INFINITY
+    @value = nil
+  end
+
+  def value(now)
+    return @value if now - @tick < @interval
+
+    @tick = now
+    @value = @glob ? aggregate : read(@path)
+  end
+
+  private
+
+  def expand(path) = path && File.expand_path(path.to_s)
+
+  def read(path)
+    v = File.read(path).strip.downcase
+    v.empty? ? nil : v
+  rescue StandardError # missing/unreadable file: no state, keep the base image
+    nil
+  end
+
+  def aggregate
+    found = Dir.glob(@glob).filter_map { |f| read(f) }
+    @priority.find { |state| found.include?(state) } || found.first
+  end
+end
+
+# State from a shell command's stdout, re-read every `interval` seconds. It runs
+# OFF the loop thread — a slow command must not delay key presses — and the
+# previous value is kept until the new one lands. With `success:`/`failure:` the
+# exit status picks the state instead of stdout (handy for toggles).
+class CommandSource
+  DEFAULT_INTERVAL = 2.0 # s — this one forks a shell, so poll it gently
+
+  def initialize(spec)
+    @cmd = spec["poll"].to_s
+    @interval = Float(spec["interval"] || DEFAULT_INTERVAL)
+    @on_success = spec["success"]&.to_s
+    @on_failure = spec["failure"]&.to_s
+    @tick = -Float::INFINITY
+    @thread = nil
+    @value = nil
+  end
+
+  def value(now)
+    collect if @thread && !@thread.alive?
+    start(now) if @thread.nil? && now - @tick >= @interval
+    @value
+  end
+
+  private
+
+  def collect
+    @value = @thread.value
+    @thread = nil
+  end
+
+  def start(now)
+    @tick = now
+    @thread = Thread.new { capture }
+  end
+
+  def capture
+    out, st = Open3.capture2("/bin/sh", "-c", @cmd, err: File::NULL)
+    return st.success? ? @on_success : @on_failure if @on_success || @on_failure
+
+    v = st.success? ? out.strip.downcase : nil
+    v.to_s.empty? ? nil : v
+  rescue StandardError
+    nil
+  end
+end
+
+# State from the key's own command (`track: true`): "busy" while the spawned
+# process runs, then "done"/"error" from its exit status.
+class ProcessSource
+  def initialize
+    @pid = nil
+    @value = nil
+  end
+
+  # The key was pressed and its command spawned — follow that process.
+  def started(pid)
+    Process.detach(@pid) if @pid # pressed again mid-run: stop following the old one
+    @pid = pid
+    @value = "busy"
+  end
+
+  def value(_now)
+    reap if @pid
+    @value
+  end
+
+  private
+
+  def reap
+    return unless Process.waitpid(@pid, Process::WNOHANG)
+
+    @value = $CHILD_STATUS&.success? ? "done" : "error"
+    @pid = nil
+  rescue Errno::ECHILD # already reaped elsewhere: call it done
+    @value = "done"
+    @pid = nil
+  end
+end
+
+# One key that mirrors external state. Holds a pre-rendered image per state and
+# reports when the visible image changed. State `nil` = the key's base image.
+class StatusKey
+  attr_reader :key
+
+  def initialize(key, spec, base_jpeg, base_dir:, res:)
+    status = spec["status"] || {}
+    @key = key
+    @base = base_jpeg
+    @states = build_states(spec, status, base_dir, res)
+    @default = status["default"]&.to_s
+    @source = build_source(status["source"] || {}, spec)
+    @state = @default
+    @expires = nil
+    @muted = nil # a state whose `hold` expired; ignored until the source changes
+  end
+
+  # Advance the state machine. Returns the JPEG to paint when the visible image
+  # changed, nil when nothing changed.
+  def tick(now)
+    before = @state
+    expire if @expires && now >= @expires
+    apply(@source.value(now), now)
+    jpeg if @state != before
+  end
+
+  # The image this key should be showing right now.
+  def jpeg = @states.dig(@state, :jpeg) || @base
+
+  # Follow the process just spawned by this key's command (`track: true`).
+  def started(pid)
+    @source.started(pid) if @source.respond_to?(:started)
+  end
+
+  private
+
+  def build_states(spec, status, base_dir, res)
+    (status["states"] || {}).to_h do |name, state|
+      state ||= {}
+      [name.to_s, { jpeg: render_spec(merge_state(spec, state), base_dir, res),
+                    hold: state["hold"]&.to_f }]
+    end
+  end
+
+  def build_source(source, spec)
+    return ProcessSource.new if spec["track"]
+    return CommandSource.new(source) if source["poll"]
+
+    unless source["file"] || source["glob"]
+      warn "  ! key #{@key}: `status:` without a source (file/glob/poll) or `track: true`"
+    end
+    FileSource.new(source, Array(source["priority"] || @states.keys - [@default]).map(&:to_s))
+  end
+
+  # A `hold:` ran out: back to the default state, and ignore that same state
+  # until the source reports something else (the file still says "done").
+  def expire
+    @muted = @state
+    @state = @default
+    @expires = nil
+  end
+
+  def apply(value, now)
+    return if value.nil? || value == @state || value == @muted || !@states.key?(value)
+
+    @muted = nil
+    @state = value
+    hold = @states[value][:hold]
+    @expires = hold && now + hold
+  end
+end
+
+# All the status keys of a config, grouped per layer. Advances every layer's
+# keys on each tick (so a hidden key is already current when you switch to it)
+# and reports which of the VISIBLE ones need repainting.
+class StatusBoard
+  def initialize(cfg, layers)
+    @layers = layers
+    @keys = build_status_keys(cfg, layers)
+  end
+
+  def empty? = @keys.all?(&:empty?)
+
+  # The status key at [layer, key], or nil if that key has no `status:`.
+  def at(layer, key) = @keys[layer][key]
+
+  # A layer's images with its status keys' current state painted on top.
+  def jpegs(layer)
+    return @layers[layer] if @keys[layer].empty?
+
+    @layers[layer].merge(@keys[layer].transform_values(&:jpeg))
+  end
+
+  # Advance every key; returns { key => jpeg } for the keys of the `visible`
+  # layer whose image changed (nil = nothing visible, e.g. a blanked deck).
+  def refresh(now, visible)
+    changed = {}
+    @keys.each_with_index do |keys, layer|
+      keys.each_value do |st|
+        jpeg = st.tick(now)
+        changed[st.key] = jpeg if jpeg && layer == visible
+      end
+    end
+    changed
+  end
+
+  private
+
+  def build_status_keys(cfg, layers)
+    cfg[:layers].each_with_index.map do |layer, i|
+      layer[:keys].filter_map do |key, spec|
+        next unless spec["status"]
+
+        [key, StatusKey.new(key, spec, layers[i][key], base_dir: cfg[:base_dir], res: cfg[:res])]
+      end.to_h
+    end
+  end
 end
 
 # ── commands ──────────────────────────────────────────────────────────────────
@@ -301,36 +568,73 @@ class BlankMonitor
   end
 end
 
+# Owns the "go dark while you're away" behaviour: watches the session (via
+# BlankMonitor) and blanks/restores the device around it.
+class Blanker
+  def initialize(settings, res)
+    @enabled = settings.fetch("suspend_with_laptop", true)
+    @method = settings.fetch("blank_method", "clear") # clear | black | lig0
+    @res = res
+    @monitor = BlankMonitor.new
+    @blanked = false
+  end
+
+  def blanked? = @blanked
+  def stop = @monitor.stop
+
+  def start
+    @monitor.start if @enabled
+    self
+  end
+
+  # A fresh device session means we are awake: re-read the lock state from
+  # scratch instead of trusting the cached one.
+  def awake!
+    @monitor.awake!
+    @blanked = false
+  end
+
+  # Blank while the session is locked, restore on unlock. The block yields the
+  # images to repaint on restore (only the caller knows the current layer).
+  def apply(deck, brightness)
+    if @monitor.blank? && !@blanked
+      blank_deck(deck, @method, @res)
+      @blanked = true
+      log "Idle (suspend/lock); deck blanked (#{@method})."
+    elsif !@monitor.blank? && @blanked
+      @blanked = false
+      deck.lig(brightness || 80)
+      deck.paint(yield)
+      log "Active again; deck restored."
+    end
+  end
+end
+
 # Drives a `run` session: holds the state and supervises the device — reconnects
 # on unplug, re-inits on suspend/resume, follows the focused window, and
 # dispatches key presses. Split into small methods (was one large cmd_run).
 class Runner
   def initialize(cfg)
-    settings = cfg[:settings]
     @cfg = cfg
     @res = cfg[:res]
     @layers = render_layers(cfg)
+    @status = StatusBoard.new(cfg, @layers)
     @brightness = settings["brightness"]
-    @welcome = settings["welcome"] || {}
-    @goodbye = settings["goodbye"] || {}
     # focus_layers: ordered [pattern, layer] pairs — follow the focused window.
     @focus_map = (settings["focus_layers"] || {}).to_a
     @last = Hash.new(0.0) # debounce, per config key
     @current = 0          # current layer index (persists across reconnects)
     @first = true
     @stop = false
-    @blanked = false      # whether the deck is currently blanked (sleep/lock)
-    @blank_enabled = settings.fetch("suspend_with_laptop", true)
-    @blank_method = settings.fetch("blank_method", "clear") # clear | black | lig0
-    @blank_monitor = BlankMonitor.new
+    @blanker = Blanker.new(settings, @res)
   end
 
   # SIGINT (Ctrl-C) / SIGTERM (systemd/session) stop the loop; then paint goodbye.
   def run
     %w[INT TERM].each { |sig| trap(sig) { @stop = true } }
-    @blank_monitor.start if @blank_enabled
+    @blanker.start
     serve until @stop
-    @blank_monitor.stop
+    @blanker.stop
     log "Deck stopped (no longer listening)."
     notify("Deck off", "Stopped listening for presses.")
   end
@@ -368,17 +672,16 @@ class Runner
   def greet(deck)
     return notify("Deck reconnected", "Reloaded the current layer.") unless @first
 
-    show_splash(deck, text: @welcome["text"] || "Hi!", background: bg(@welcome, "1e1e2e"),
-                      color: fg(@welcome, "ffffff"), brightness: @brightness, res: @res, hold: 1.3)
+    show_splash(deck, text: welcome["text"] || "Hi!", background: bg(welcome, "1e1e2e"),
+                      color: fg(welcome, "ffffff"), brightness: @brightness, res: @res, hold: 1.3)
     @first = false
     notify("Deck on", "Listening for FIFINE D6 presses.")
   end
 
   # Paint the current layer and reset the awake state (a session means we're up).
   def paint_session(deck)
-    @blank_monitor.awake!
-    @blanked = false
-    deck.apply_images(@layers[@current], brightness: @brightness)
+    @blanker.awake!
+    deck.apply_images(layer_jpegs, brightness: @brightness)
     apply_blank_state(deck) # stay dark if we woke up still asleep/locked
     log "Deck ready on layer '#{layer_name}' (#{@cfg[:layers].size} layer(s)). " \
         "Listening… (Ctrl-C/SIGTERM to quit)"
@@ -397,6 +700,7 @@ class Runner
       tick = now
       apply_blank_state(deck)
       poll_focus(deck, now)
+      poll_status(deck, now)
       handle_press(deck) if ready
     end
     :stop
@@ -404,17 +708,18 @@ class Runner
 
   # Blank the deck while the laptop is asleep or the screen is locked; restore it
   # on wake/unlock. (Resume also re-inits via the gap path / paint_session.)
-  def apply_blank_state(deck)
-    if @blank_monitor.blank? && !@blanked
-      blank_deck(deck, @blank_method, @res)
-      @blanked = true
-      log "Idle (suspend/lock); deck blanked (#{@blank_method})."
-    elsif !@blank_monitor.blank? && @blanked
-      @blanked = false
-      deck.lig(@brightness || 80)
-      deck.paint(@layers[@current])
-      log "Active again; deck restored."
-    end
+  def apply_blank_state(deck) = @blanker.apply(deck, @brightness) { layer_jpegs }
+
+  # The current layer's images with each status key's current state on top.
+  def layer_jpegs = @status.jpegs(@current)
+
+  # Advance the status keys and repaint the visible ones that changed. Nothing
+  # is visible while blanked — repainting there would fight apply_blank_state.
+  def poll_status(deck, now)
+    return if @status.empty?
+
+    @status.refresh(now, @blanker.blanked? ? nil : @current)
+           .each { |key, jpeg| deck.paint_key(key, jpeg) }
   end
 
   # Switch the layer to match the focused window, only when the app changes.
@@ -451,28 +756,41 @@ class Runner
       target ? switch_layer(deck, target, label) : log("#{label}: layer '#{spec['layer']}' not found")
     elsif spec && spec["command"]
       log "#{label}: #{spec['command']}"
-      run_command(spec["command"])
+      start_command(ckey, spec)
     else
       log "#{label}: (no command)"
     end
+  end
+
+  # Run a key's command. A `track: true` key keeps the pid instead of detaching,
+  # so its status key can follow the process (busy → done/error).
+  def start_command(ckey, spec)
+    watcher = spec["track"] && @status.at(@current, ckey)
+    return run_command(spec["command"]) unless watcher
+
+    pid = spawn_command(spec["command"])
+    watcher.started(pid) if pid
   end
 
   def switch_layer(deck, target, label)
     @current = target
     b = @cfg[:layers][@current][:brightness]
     deck.lig(b) if b
-    deck.paint(@layers[@current]) # smooth switch (no re-init)
+    deck.paint(layer_jpegs) # smooth switch (no re-init)
     log "#{label}: → layer '#{layer_name}'"
   end
 
   # Very visible "stopped" state: makes it clear ruby isn't listening anymore.
   def paint_goodbye(deck)
-    show_splash(deck, text: @goodbye["text"] || "Deck OFF", background: bg(@goodbye, "2a0a0a"),
-                      color: fg(@goodbye, "ff6666"), brightness: @goodbye["brightness"] || 25, res: @res)
+    show_splash(deck, text: goodbye["text"] || "Deck OFF", background: bg(goodbye, "2a0a0a"),
+                      color: fg(goodbye, "ff6666"), brightness: goodbye["brightness"] || 25, res: @res)
   rescue StandardError => e
     log "couldn't paint 'OFF' (#{e.class}: #{e.message})"
   end
 
+  def settings = @cfg[:settings]
+  def welcome = settings["welcome"] || {}
+  def goodbye = settings["goodbye"] || {}
   def layer_name = @cfg[:layers][@current][:name]
   def bg(spec, default) = (spec["background"] || default).to_s
   def fg(spec, default) = (spec["color"] || default).to_s
