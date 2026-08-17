@@ -54,7 +54,10 @@ jobs:
       - name: Syntax check
         run: python -m py_compile bin/deck-tray
       - name: Ruff
-        run: pipx run ruff check bin/deck-tray
+        # Pinned like RuboCop above: unpinned, `pipx run` takes the newest ruff,
+        # whose default rule set grows between releases and turns CI red on
+        # untouched files.
+        run: pipx run --spec 'ruff~=0.16.0' ruff check bin/deck-tray
 
   yaml:
     name: YAML (yamllint)
