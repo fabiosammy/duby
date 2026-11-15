@@ -292,6 +292,11 @@ unless noted):
 `FIFINE_COLS`, `FIFINE_FLIP_ROWS`, `FIFINE_PACKET`, `FIFINE_REPORTID`,
 `FIFINE_HIDRAW`, `FIFINE_INIT`, `FIFINE_FINISH`, `FIFINE_MAGICK`, `FIFINE_FONT`.
 
+`FIFINE_DEV_DIR` (default `/dev`) is where the hidraw nodes are opened. Use it
+when the host's `/dev` is bind-mounted elsewhere, e.g. inside a container with
+`/dev:/host-dev:ro` and a `device_cgroup_rules` entry for the hidraw major:
+discovery still goes through `/sys/class/hidraw`, so it survives replugs.
+
 ## Adapting to another deck
 
 `probe.rb` is an explorer/debugger for discovering the settings a different
