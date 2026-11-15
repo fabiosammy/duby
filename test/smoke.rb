@@ -101,6 +101,31 @@ check("status: a file source drives the state, `hold` reverts to the base image"
    k.tick(4.0).nil?].all?       # the file still says "done": stays on the base
 end
 
+check("status: no state (file gone / unknown name) falls back to the base image") do
+  file = File.join(tmp, "two.state")
+  File.write(file, "busy")
+  k = status_key({ "file" => file }, STATES)
+  busy = k.tick(0.0)
+  File.delete(file)
+  gone = k.tick(1.0)
+  File.write(file, "busy")
+  k.tick(2.0)
+  File.write(file, "nonsense")
+  [busy == "img:···/3a2f00", gone == "img:base", k.tick(3.0) == "img:base"].all?
+end
+
+check("status: after a `hold` expires, the same state shows again once the file resets") do
+  file = File.join(tmp, "three.state")
+  File.write(file, "done")
+  k = status_key({ "file" => file }, STATES)
+  k.tick(0.0)
+  k.tick(2.5)              # hold expired -> base, "done" muted
+  File.delete(file)
+  k.tick(3.0)              # file gone: the mute lifts
+  File.write(file, "done")
+  k.tick(4.0) == "img:ok/0a2a0a"
+end
+
 check("status: a glob aggregates state files by priority") do
   File.write(File.join(tmp, "a.state"), "done")
   File.write(File.join(tmp, "b.state"), "busy")

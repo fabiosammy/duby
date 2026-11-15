@@ -437,12 +437,17 @@ class StatusKey
     @expires = nil
   end
 
+  # No state, or one the key doesn't define (file gone, command failed without
+  # `failure:`), means the default: back to the base image, not stuck on the
+  # last state. Anything other than the muted state lifts the mute, so the next
+  # "done" after a `hold` shows again.
   def apply(value, now)
-    return if value.nil? || value == @state || value == @muted || !@states.key?(value)
+    value = @default unless @states.key?(value)
+    @muted = nil unless value == @muted
+    return if value == @state || (@muted && value == @muted)
 
-    @muted = nil
     @state = value
-    hold = @states[value][:hold]
+    hold = @states.dig(value, :hold)
     @expires = hold && now + hold
   end
 end
