@@ -23,7 +23,9 @@ jobs:
         with:
           ruby-version: "3.4"
       - name: Install RuboCop
-        run: gem install rubocop -v "~> 1.86"
+        # Pinned to a minor (like ruff below): "~> 1.86" took 1.92, whose
+        # stricter Layout/ExtraSpacing turned CI red on untouched files.
+        run: gem install rubocop -v "~> 1.92.0"
       - name: Syntax check
         run: ruby -c deck.rb && ruby -c probe.rb && ruby -c lib/fifine_deck.rb && ruby -c test/smoke.rb
       - name: RuboCop

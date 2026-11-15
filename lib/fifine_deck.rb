@@ -192,9 +192,9 @@ module FifineDeck
                      "stp" => :stp, "ulend" => :ulend, "cle" => :clear_all }.freeze
 
     def run_step(step)
-      if (m = SIMPLE_STEPS[step])  then send(m)
-      elsif step =~ /^lig(\d+)?$/  then lig((::Regexp.last_match(1) || "80").to_i)
-      elsif step =~ /^mod(\d+)?$/  then mod((::Regexp.last_match(1) || "0").to_i)
+      if (m = SIMPLE_STEPS[step]) then send(m)
+      elsif step =~ /^lig(\d+)?$/ then lig((::Regexp.last_match(1) || "80").to_i)
+      elsif step =~ /^mod(\d+)?$/ then mod((::Regexp.last_match(1) || "0").to_i)
       end
       sleep 0.01
     end
