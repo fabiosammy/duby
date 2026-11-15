@@ -8,7 +8,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=%h/Desenvolvimento/projetos/thoths/deck/duby/bin/deck-daemon
+ExecStart="@DUBY_DIR@/bin/deck-daemon"
 # SIGTERM reaches ruby (cgroup) -> triggers the "Deck OFF" screen before exit
 KillSignal=SIGTERM
 TimeoutStopSec=10
@@ -19,9 +19,8 @@ RestartSec=5
 WantedBy=graphical-session.target
 
 # ── Install (systemd --user) ──────────────────────────────────────────────────
-#   mkdir -p ~/.config/systemd/user
-#   ln -sf "$PWD/systemd/deck.service" ~/.config/systemd/user/deck.service
-#   systemctl --user daemon-reload
+# Template: @DUBY_DIR@ is filled in with this checkout's path by
+#   bin/install service          # writes ~/.config/systemd/user/deck.service
 #   systemctl --user enable --now deck.service
 #   journalctl --user -u deck -f         # (in addition to deck.log in the directory)
 #   systemctl --user stop deck.service   # paints "Deck OFF" and exits

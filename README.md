@@ -229,17 +229,24 @@ this uses Qt's `QSystemTrayIcon` (the KDE StatusNotifierItem protocol).
 
 ```sh
 nix-shell --run "QT_QPA_PLATFORM=xcb python3 bin/deck-tray"   # try it
-cp deck.desktop ~/.config/autostart/                          # start on login
+bin/install autostart                                         # start on login
 ```
 
 ### systemd --user (headless, auto-restart)
 
 ```sh
-mkdir -p ~/.config/systemd/user
-ln -sf "$PWD/systemd/deck.service" ~/.config/systemd/user/deck.service
-systemctl --user daemon-reload
+bin/install service
 systemctl --user enable --now deck.service
 ```
+
+`bin/install` writes the autostart entry / unit with this checkout's path (the
+tracked files are templates with an `@DUBY_DIR@` placeholder). Re-run it after
+moving the repo. If you used the old `ln -sf` instructions, it replaces the
+symlink with a real file.
+
+Commands run by keys get their output discarded, so `deck.log` only holds the
+daemon's own messages. The launchers keep one previous log: past 1 MiB,
+`deck.log` is moved to `deck.log.1` at start.
 
 Both deliver `SIGTERM` to the Ruby process on stop, which paints the
 "Deck OFF" screen before exiting.
@@ -342,8 +349,9 @@ bin/
   deck-tray-daemon   launch the tray inside nix-shell
   focus-or-launch    reference kdotool focus-or-launch helper
   cycle-or-launch    reference kdotool helper: cycle windows of a class, else launch
-deck.desktop         KDE autostart entry
-systemd/deck.service systemd --user unit
+  install            install the autostart entry or the systemd unit for this checkout
+deck.desktop         KDE autostart entry (template, see bin/install)
+systemd/deck.service systemd --user unit (template, see bin/install)
 ```
 
 ## Acknowledgements

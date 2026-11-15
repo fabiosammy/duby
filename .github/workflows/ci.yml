@@ -41,9 +41,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Bash syntax
-        run: for f in bin/deck-daemon bin/deck-stop bin/deck-tray-daemon bin/focus-or-launch; do bash -n "$f"; done
+        run: for f in bin/deck-daemon bin/deck-stop bin/deck-tray-daemon bin/focus-or-launch bin/cycle-or-launch bin/install; do bash -n "$f"; done
       - name: ShellCheck
-        run: shellcheck bin/deck-daemon bin/deck-stop bin/deck-tray-daemon bin/focus-or-launch
+        run: shellcheck bin/deck-daemon bin/deck-stop bin/deck-tray-daemon bin/focus-or-launch bin/cycle-or-launch bin/install
 
   python:
     name: Python (ruff + compile)

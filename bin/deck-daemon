@@ -13,6 +13,11 @@ cd "$HERE" || exit 1
 
 LOG="$HERE/deck.log"
 
+# keep one previous log: rotate at start once it passes 1 MiB
+if [ -f "$LOG" ] && [ "$(stat -c %s "$LOG")" -gt 1048576 ]; then
+  mv -f "$LOG" "$LOG.1"
+fi
+
 # ensure PATH has: user tools, nix profile and system profile — needed to find
 # nix-shell, cycle-or-launch (~/.local/bin), kdotool, etc.
 export PATH="$HOME/.local/bin:$HOME/.nix-profile/bin:/run/current-system/sw/bin:/etc/profiles/per-user/$USER/bin:$PATH"

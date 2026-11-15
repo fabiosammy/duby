@@ -42,7 +42,8 @@ Linux. See `README.md` for the user-facing docs.
 - `probe.rb` — explorer/debugger built on the lib (`info`/`doctor`/`blink`/
   `probe`/`probe-res`/`orient`/`grid`/`listen`/`raw`) for adapting to other
   Mirabox decks; uses RAW device indices (no row-flip) so it reveals true order.
-- `bin/` — daemon launchers, KDE tray (PySide6), helpers.
+- `bin/` — daemon launchers, KDE tray (PySide6), helpers; `bin/install` writes
+  the autostart entry / systemd unit from the `@DUBY_DIR@` templates.
 - `shell.nix` — dev shell (Ruby, ImageMagick, DejaVu font, Python/PySide6).
 
 ## Hardware facts (don't re-derive)

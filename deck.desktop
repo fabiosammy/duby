@@ -2,15 +2,14 @@
 Type=Application
 Name=FIFINE Deck
 Comment=Stream deck tray (deck.rb) — listens for presses and runs commands
-Exec=/home/fabiosammy/Desenvolvimento/projetos/thoths/deck/duby/bin/deck-tray-daemon
+Exec="@DUBY_DIR@/bin/deck-tray-daemon"
 Icon=input-keyboard
 Terminal=false
 X-KDE-autostart-after=panel
 X-GNOME-Autostart-enabled=true
 
-# To autostart on KDE login, copy to ~/.config/autostart/:
-#   cp deck.desktop ~/.config/autostart/
-# (or: System Settings → Autostart → Add Application/Script)
+# Template: @DUBY_DIR@ is filled in with this checkout's path by
+#   bin/install autostart        # writes ~/.config/autostart/deck.desktop
 #
 # Exec points at the TRAY (bin/deck-tray-daemon). To run WITHOUT a tray
-# (headless), switch it to bin/deck-daemon.
+# (headless), use `bin/install service` instead.
