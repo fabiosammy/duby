@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# install — write the KDE autostart entry or the systemd --user unit with this
+# checkout's real path. The tracked deck.desktop / systemd/deck.service carry an
+# @DUBY_DIR@ placeholder, so moving the repo never needs a commit.
+#
+#   bin/install autostart   # start the tray on KDE login (bin/deck-tray-daemon)
+#   bin/install service     # headless systemd --user unit (bin/deck-daemon)
+#
+# Pick one: two daemons fight over the device.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+
+# Copy a tracked template to its install location, filling in the checkout path.
+# The old docs symlinked the unit into the repo: remove first, so sed never
+# writes through that link into the tracked template.
+render() {
+  mkdir -p "$(dirname "$2")"
+  rm -f "$2"
+  sed "s|@DUBY_DIR@|$HERE|g" "$1" >"$2"
+  echo "wrote $2"
+}
+
+case "${1:-}" in
+  autostart)
+    render "$HERE/deck.desktop" "$HOME/.config/autostart/deck.desktop"
+    ;;
+  service)
+    render "$HERE/systemd/deck.service" "$HOME/.config/systemd/user/deck.service"
+    systemctl --user daemon-reload
+    echo "enable with: systemctl --user enable --now deck.service"
+    ;;
+  *)
+    echo "usage: bin/install autostart|service" >&2
+    exit 2
+    ;;
+esac

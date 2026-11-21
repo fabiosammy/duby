@@ -41,6 +41,9 @@ module FifineDeck
   ENV_PACKET   = ENV["FIFINE_PACKET"]&.to_i
   ENV_REPORTID = ENV["FIFINE_REPORTID"]&.to_i
   FORCED       = ENV["FIFINE_HIDRAW"]
+  # Where the hidraw nodes live. A container that bind-mounts the host's /dev
+  # elsewhere (e.g. /host-dev) still finds the deck via sysfs, across replugs.
+  DEV_DIR      = ENV.fetch("FIFINE_DEV_DIR", "/dev")
   INIT_SEQ = (ENV["FIFINE_INIT"]   || "dis,lig0,han").split(",").map(&:strip).reject(&:empty?)
   FIN_SEQ  = (ENV["FIFINE_FINISH"] || "ulend,stp").split(",").map(&:strip).reject(&:empty?)
 
@@ -92,7 +95,7 @@ module FifineDeck
         rescue StandardError
           "".b
         end
-        parse_descriptor(desc).merge(node: "/dev/#{File.basename(sys)}",
+        parse_descriptor(desc).merge(node: File.join(DEV_DIR, File.basename(sys)),
                                      name: uevent[/HID_NAME=(.+)/, 1])
       end
     end

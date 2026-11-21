@@ -227,10 +227,12 @@ end
 
 # Spawn a key's command and return its pid (no detach, so a tracked key can
 # reap it). nil if there is nothing to run or the spawn failed.
+# Output goes to /dev/null: launched apps (Slack, browsers…) outlive the daemon
+# and would otherwise keep writing their own logs into deck.log forever.
 def spawn_command(cmd)
   return nil if cmd.nil? || cmd.to_s.strip.empty?
 
-  Process.spawn("/bin/sh", "-c", cmd.to_s, pgroup: true)
+  Process.spawn("/bin/sh", "-c", cmd.to_s, pgroup: true, out: File::NULL, err: File::NULL)
 rescue StandardError => e
   warn "  ! failed to run #{cmd.inspect}: #{e.message}"
   nil

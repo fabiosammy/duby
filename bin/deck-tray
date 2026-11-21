@@ -23,6 +23,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 HERE = Path(__file__).resolve().parent.parent  # project directory (duby/)
 LOG = HERE / "deck.log"
+LOG_MAX = 1024 * 1024  # rotate to deck.log.1 at start once past 1 MiB
 CONFIG = "deck.yml"
 
 
@@ -67,6 +68,8 @@ class DeckTray:
     def start(self):
         if self.running():
             return
+        if LOG.exists() and LOG.stat().st_size > LOG_MAX:
+            LOG.replace(HERE / "deck.log.1")
         # Long-lived handle on purpose: it IS the child's stdout, closed in stop().
         self.logf = open(LOG, "a", buffering=1)  # noqa: SIM115
         self.proc = subprocess.Popen(
