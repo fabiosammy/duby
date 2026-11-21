@@ -192,9 +192,9 @@ module FifineDeck
                      "stp" => :stp, "ulend" => :ulend, "cle" => :clear_all }.freeze
 
     def run_step(step)
-      if (m = SIMPLE_STEPS[step])  then send(m)
-      elsif step =~ /^lig(\d+)?$/  then lig((::Regexp.last_match(1) || "80").to_i)
-      elsif step =~ /^mod(\d+)?$/  then mod((::Regexp.last_match(1) || "0").to_i)
+      if (m = SIMPLE_STEPS[step]) then send(m)
+      elsif step =~ /^lig(\d+)?$/ then lig((::Regexp.last_match(1) || "80").to_i)
+      elsif step =~ /^mod(\d+)?$/ then mod((::Regexp.last_match(1) || "0").to_i)
       end
       sleep 0.01
     end
@@ -227,6 +227,15 @@ module FifineDeck
         bat(display_index(k), jpeg.bytesize)
         chunks(jpeg)
       end
+      finish!
+    end
+
+    # Repaint ONE key, leaving every other key alone. A full-size image covers
+    # the key, so no CLE is needed — and `paint` can't be used here because it
+    # starts with `clear_all`, which would blank the rest of the layer.
+    def paint_key(key, jpeg)
+      bat(display_index(key), jpeg.bytesize)
+      chunks(jpeg)
       finish!
     end
 

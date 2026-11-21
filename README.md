@@ -24,6 +24,9 @@ distro-specific beyond the optional KDE integration.
   `hicolor`/`breeze`, avoids monochrome `symbolic`), with automatic fallback to
   `text` when nothing is found.
 - **Key-press listening** that runs your shell commands.
+- **Status keys** — a key that mirrors an external state (a state file, a polled
+  command, or the key's own running process): busy → done ✓, mic on/off, CI
+  red/green.
 - **Welcome / goodbye splash screens** so it's obvious whether the deck is
   actively listening.
 - **KDE system-tray daemon** (PySide6 / `QSystemTrayIcon`), autostart entry and
@@ -143,6 +146,67 @@ settings:
 ```
 
 Find a window's class with `kdotool getactivewindow getwindowclassname`.
+
+### Status keys (a key that mirrors an external state)
+
+A key can show what is happening *outside* the deck — a build running, a mic
+muted, a Claude Code session thinking. Add `status:` with one image per state;
+the daemon swaps them on the device, repainting **only that key**.
+
+```yaml
+keys:
+  8:
+    text: "Claude"                 # the base image (shown when no state is active)
+    background: "1e1e2e"
+    command: "focus-or-launch kitty kitty"   # pressing it still does something
+    status:
+      source:
+        file: "~/.cache/duby/claude.state"   # the file's content IS the state name
+      states:
+        busy:      { text: "···", background: "3a2f00", color: "ffcc00" }
+        attention: { text: "?",   background: "2a1a00", color: "ffaa00" }
+        done:      { text: "✓",   background: "0a2a0a", color: "66ff66", hold: 5 }
+        error:     { text: "✗",   background: "2a0a0a", color: "ff6666", hold: 5 }
+```
+
+Each state is a normal visual spec (`text`/`icon`/`image`/`color`) and
+**inherits the key's own visual**, so a state that only sets `background:` keeps
+the key's text. `hold: <seconds>` reverts to the base image after N seconds (and
+that state is then ignored until the source reports something else, so a stale
+`done` in the file doesn't re-trigger). Unknown state names are ignored.
+
+| Source | Meaning |
+| ------ | ------- |
+| `file: <path>` | The file's content is the state name. A *push* model: whoever knows the state writes it. |
+| `glob: <pattern>` | Aggregate several state files (e.g. one per session); the first state of `priority:` that any file reports wins. |
+| `poll: <command>` + `interval:` | Run a command every N seconds; its **stdout** is the state name — or, with `success:`/`failure:`, its **exit status** picks one of two states (mic muted/unmuted, VPN up/down…). |
+| `track: true` (on the key) | Follow the key's **own** `command`: `busy` while it runs, then `done`/`error` from the exit status. |
+
+Poll commands run off the read loop, so a slow one never delays a key press.
+Hidden layers keep tracking, so a status key is already up to date when you
+switch to its layer, and nothing is painted while the deck is blanked.
+
+**Claude Code example.** Point the key at `~/.cache/duby/claude.state` and let
+Claude Code's hooks write it (`~/.claude/settings.json`):
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command",
+      "command": "mkdir -p ~/.cache/duby && echo busy > ~/.cache/duby/claude.state" }] }],
+    "Notification": [{ "hooks": [{ "type": "command",
+      "command": "echo attention > ~/.cache/duby/claude.state" }] }],
+    "Stop": [{ "hooks": [{ "type": "command",
+      "command": "echo done > ~/.cache/duby/claude.state" }] }]
+  }
+}
+```
+
+The key turns amber while Claude works, green for 5 s when it finishes, then
+back to normal. For several sessions at once, write one file per session (the
+hook gets the event JSON on stdin: `s=$(jq -r .session_id); echo busy >
+~/.cache/duby/claude/$s.state`) and point the key at `glob:` with
+`priority: [error, attention, busy, done]`.
 
 ### Useful command snippets (KDE / PipeWire)
 

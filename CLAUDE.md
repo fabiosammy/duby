@@ -13,7 +13,8 @@ Linux. See `README.md` for the user-facing docs.
 - `lib/fifine_deck.rb` — module `FifineDeck`:
   - `Device` — find the hidraw node via sysfs, parse the HID report descriptor.
   - `Deck` — transport + CRT protocol: `write_report`, named commands
-    (`dis`/`lig`/`han`/`bat`/`stp`/`ulend`/`cle`…), `apply_images`, and
+    (`dis`/`lig`/`han`/`bat`/`stp`/`ulend`/`cle`…), `apply_images`, `paint`
+    (all keys, clears first) / `paint_key` (one key, no clear), and
     `read_press` (+ `wait_readable`) for key input. `display_index` does the
     row-flip (see Hardware below).
   - `Render` — `color`/`text`/`icon`/`image` → JPEG via ImageMagick. Detects
@@ -26,12 +27,18 @@ Linux. See `README.md` for the user-facing docs.
   `run` is driven by the `Runner` class (small methods: `serve`/`listen`/
   `poll_focus`/`handle_press`/`dispatch`/`switch_layer`); it self-heals — a
   supervise loop reconnects on unplug and re-inits on suspend/resume (detected
-  via a CLOCK_BOOTTIME jump > RESUME_GAP). `BlankMonitor` polls logind's
-  `LockedHint` via `loginctl` (no gdbus), so the deck blanks while the session is
-  locked — covering screen-lock and lock-on-suspend (`settings.suspend_with_laptop`,
-  default true).
+  via a CLOCK_BOOTTIME jump > RESUME_GAP). `Blanker` (+ `BlankMonitor`, which
+  polls logind's `LockedHint` via `loginctl`, no gdbus) blanks the deck while the
+  session is locked — covering screen-lock and lock-on-suspend
+  (`settings.suspend_with_laptop`, default true).
   `settings.focus_layers` (class→layer, needs kdotool) auto-switches the layer
   to follow the focused window; polled every FOCUS_POLL, acts only on change.
+  `status:` keys mirror external state: `StatusKey` holds one pre-rendered image
+  per state plus a source (`FileSource` = file/glob, `CommandSource` = poll,
+  threaded so a slow command can't delay presses, `ProcessSource` = `track: true`,
+  the key's own command); `StatusBoard` groups them per layer, advances all of
+  them on every tick and returns the visible keys that changed, painted with
+  `Deck#paint_key`.
 - `probe.rb` — explorer/debugger built on the lib (`info`/`doctor`/`blink`/
   `probe`/`probe-res`/`orient`/`grid`/`listen`/`raw`) for adapting to other
   Mirabox decks; uses RAW device indices (no row-flip) so it reveals true order.

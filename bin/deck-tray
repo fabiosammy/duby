@@ -11,6 +11,7 @@ send SIGTERM to ruby, which triggers the "Deck OFF" screen.
 
 Run via bin/deck-tray-daemon (which enters the nix-shell and forces QT_QPA_PLATFORM=xcb).
 """
+import contextlib
 import signal
 import subprocess
 import sys
@@ -66,7 +67,8 @@ class DeckTray:
     def start(self):
         if self.running():
             return
-        self.logf = open(LOG, "a", buffering=1)
+        # Long-lived handle on purpose: it IS the child's stdout, closed in stop().
+        self.logf = open(LOG, "a", buffering=1)  # noqa: SIM115
         self.proc = subprocess.Popen(
             ["ruby", "deck.rb", "run", CONFIG],
             cwd=str(HERE),
@@ -77,20 +79,16 @@ class DeckTray:
 
     def stop(self):
         if self.running():
+            self.proc.terminate()              # SIGTERM to ruby -> paints "Deck OFF"
             try:
-                self.proc.terminate()          # SIGTERM to ruby -> paints "Deck OFF"
                 self.proc.wait(timeout=6)
-            except Exception:
-                try:
-                    self.proc.kill()
-                except Exception:
-                    pass
+            except subprocess.TimeoutExpired:  # stuck painting "Deck OFF": kill it
+                self.proc.kill()
+                self.proc.wait()
         self.proc = None
         if self.logf:
-            try:
+            with contextlib.suppress(OSError):
                 self.logf.close()
-            except Exception:
-                pass
             self.logf = None
 
     # ── menu actions ──────────────────────────────────────────────────────────

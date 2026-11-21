@@ -21,6 +21,7 @@ inline in `.rubocop.yml`.
 
 | # | Item | Where |
 | - | ---- | ----- |
+| [#52](https://github.com/fabiosammy/duby/issues/52) | ✅ Status keys — mirror an external state (`status:`/`track:`) | `StatusKey`/`StatusBoard`, `Deck#paint_key` |
 | [#3](https://github.com/fabiosammy/duby/issues/3) | Per-key on/off toggle state (two images) | `render_spec`, press handler in `cmd_run` |
 | [#4](https://github.com/fabiosammy/duby/issues/4) | Live-reload the config on file change | `load_config`, `render_layers`, `cmd_run` |
 | [#5](https://github.com/fabiosammy/duby/issues/5) | Text-over-image overlay + icon + caption + layout controls | `FifineDeck::Render`, `render_spec` |
@@ -34,6 +35,9 @@ every open item with its issue number.
 
 ## Done
 
+- Status keys: `status:` states driven by a state file / glob / polled command,
+  or by the key's own process (`track: true`); single-key repaint (#52). A
+  two-state `poll:` key already covers most of #3.
 - Layers / pages (`layers:` + `layer: next|prev|<name>`, focus-following).
 - Self-healing daemon (reconnect on unplug, re-init on suspend/resume).
 - KDE system-tray daemon (PySide6), autostart and `systemd --user` unit.
